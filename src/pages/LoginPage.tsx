@@ -7,8 +7,8 @@ import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
 const schema = z.object({
-  email: z.string().min(1, 'กรุณากรอกอีเมลหรือเลขบัญชี (1 หรือ 2)'),
-  password: z.string().min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'),
+  email: z.string().min(1, 'กรุณาเลือกหรือกรอกบัญชีผู้ใช้ (HET-1 หรือ HET-2)'),
+  password: z.string().min(1, 'กรุณากรอกรหัสผ่าน'),
 })
 
 type FormData = z.infer<typeof schema>
@@ -18,23 +18,43 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [showGuide, setShowGuide] = useState(!isConfigured)
+  const [selectedAccount, setSelectedAccount] = useState<'1' | '2' | null>('1')
 
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, setFocus, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
+    defaultValues: {
+      email: '1@a.com',
+      password: '',
+    },
   })
 
-  const performLogin = async (rawEmail: string, pass: string) => {
-    let email = rawEmail.trim()
-    if (email === '1') email = '1@a.com'
-    else if (email === '2') email = '2@a.com'
+  const performLogin = async (rawEmail: string, rawPass: string) => {
+    let email = rawEmail.trim().toLowerCase()
+    if (email === '1' || email === 'het-1' || email === 'het1') email = '1@a.com'
+    else if (email === '2' || email === 'het-2' || email === 'het2') email = '2@a.com'
     else if (!email.includes('@')) email = `${email}@a.com`
 
+    // Map short password '1' or '2' to Supabase requirement
+    let pass = rawPass.trim()
+    if (email === '1@a.com') {
+      if (pass === '1') pass = '111111'
+    } else if (email === '2@a.com') {
+      if (pass === '2') pass = '222222'
+    }
+
     setIsLoading(true)
-    const { error } = await signIn(email, pass)
+    let { error } = await signIn(email, pass)
+    
+    // Fallback: If 111111/222222 fails, try password123 as fallback
+    if (error && (pass === '111111' || pass === '222222')) {
+      const retry = await signIn(email, 'password123')
+      error = retry.error
+    }
+
     setIsLoading(false)
     if (error) {
       const msg = error.message.includes('Invalid') 
-        ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' 
+        ? 'รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง' 
         : `เข้าสู่ระบบไม่สำเร็จ: ${error.message}`
       toast.error(msg)
     }
@@ -49,10 +69,14 @@ export default function LoginPage() {
     await performLogin(data.email, data.password)
   }
 
-  const handleQuickLogin = async (accountNum: '1' | '2') => {
+  const handleSelectAccount = (accountNum: '1' | '2') => {
+    setSelectedAccount(accountNum)
     setValue('email', `${accountNum}@a.com`)
-    setValue('password', 'password123')
-    await performLogin(`${accountNum}@a.com`, 'password123')
+    setValue('password', '')
+    // Focus password field immediately
+    setTimeout(() => {
+      setFocus('password')
+    }, 50)
   }
 
   return (
@@ -80,63 +104,53 @@ export default function LoginPage() {
           <h2 className="text-lg font-bold text-white mb-5">เข้าสู่ระบบ</h2>
           
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Quick 1-tap Account Switcher */}
+            {/* Quick 1-tap Factory Account Selector */}
             <div className="bg-[#0f172a]/70 border border-slate-700/80 rounded-2xl p-3 mb-2">
               <p className="text-[11px] font-semibold text-slate-300 mb-2 flex items-center justify-between">
-                <span>⚡ เลือกบัญชีด่วน (คลิกเดียวเข้าสู่ระบบ):</span>
+                <span>🏭 แตะเลือกบัญชีโรงงาน:</span>
+                <span className="text-[10px] text-slate-400">แตะแล้วใส่รหัสผ่าน</span>
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => handleQuickLogin('1')}
-                  disabled={isLoading}
-                  className="p-2.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 active:scale-95 border border-blue-500/30 text-left transition-all group"
+                  onClick={() => handleSelectAccount('1')}
+                  className={`p-3 rounded-xl border text-left transition-all active:scale-95 ${
+                    selectedAccount === '1'
+                      ? 'bg-blue-600/25 border-blue-400 ring-2 ring-blue-500/30'
+                      : 'bg-slate-900/60 border-slate-700/80 hover:bg-slate-800'
+                  }`}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                    <span className="text-xs font-bold text-white group-hover:text-blue-300">บัญชี 1 (HET-2)</span>
+                    <span className="text-base select-none">🏭</span>
+                    <span className="text-sm font-extrabold text-white">HET-1</span>
                   </div>
-                  <p className="text-[10px] text-blue-300/70 font-mono mt-0.5">1@a.com</p>
+                  <p className="text-[10px] text-blue-300/80 mt-0.5">โรงงาน 1 (รหัส: 1)</p>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleQuickLogin('2')}
-                  disabled={isLoading}
-                  className="p-2.5 rounded-xl bg-indigo-600/15 hover:bg-indigo-600/25 active:scale-95 border border-indigo-500/30 text-left transition-all group"
+                  onClick={() => handleSelectAccount('2')}
+                  className={`p-3 rounded-xl border text-left transition-all active:scale-95 ${
+                    selectedAccount === '2'
+                      ? 'bg-indigo-600/25 border-indigo-400 ring-2 ring-indigo-500/30'
+                      : 'bg-slate-900/60 border-slate-700/80 hover:bg-slate-800'
+                  }`}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
-                    <span className="text-xs font-bold text-white group-hover:text-indigo-300">บัญชี 2 (HET-1)</span>
+                    <span className="text-base select-none">🏭</span>
+                    <span className="text-sm font-extrabold text-white">HET-2</span>
                   </div>
-                  <p className="text-[10px] text-indigo-300/70 font-mono mt-0.5">2@a.com</p>
+                  <p className="text-[10px] text-indigo-300/80 mt-0.5">โรงงาน 2 (รหัส: 2)</p>
                 </button>
               </div>
             </div>
 
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                อีเมล หรือเลขบัญชี (1 หรือ 2)
-              </label>
-              <div className="relative">
-                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input
-                  {...register('email')}
-                  type="text"
-                  autoComplete="username"
-                  placeholder="1 หรือ 1@a.com"
-                  className="w-full bg-[#0f172a] border border-slate-700 text-white placeholder-slate-600 rounded-xl px-4 py-3 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
-              {errors.email && (
-                <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>
-              )}
-            </div>
+            {/* Email (Auto-filled by selecting factory) */}
+            <input type="hidden" {...register('email')} />
 
             {/* Password */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                รหัสผ่าน
+                รหัสผ่านสำหรับ <span className="font-bold text-white">{selectedAccount === '1' ? 'HET-1 (รหัสคือ 1)' : 'HET-2 (รหัสคือ 2)'}</span>
               </label>
               <div className="relative">
                 <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -144,8 +158,8 @@ export default function LoginPage() {
                   {...register('password')}
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
-                  placeholder="••••••••"
-                  className="w-full bg-[#0f172a] border border-slate-700 text-white placeholder-slate-600 rounded-xl px-4 py-3 pl-9 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder={selectedAccount === '1' ? 'ใส่เลข 1 แล้วกดเข้าสู่ระบบ' : 'ใส่เลข 2 แล้วกดเข้าสู่ระบบ'}
+                  className="w-full bg-[#0f172a] border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-3 pl-9 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
                 <button
                   type="button"
