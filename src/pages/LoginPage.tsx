@@ -21,7 +21,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [showGuide, setShowGuide] = useState(!isConfigured)
-  const [selectedAccount, setSelectedAccount] = useState<'1' | '2' | null>('1')
+  const [selectedAccount, setSelectedAccount] = useState<'1' | '2' | 'admin'>('1')
+  const [isManualInput, setIsManualInput] = useState(false)
   const [isSupabasePaused, setIsSupabasePaused] = useState(false)
 
   const { register, handleSubmit, setValue, setFocus, formState: { errors } } = useForm<FormData>({
@@ -85,9 +86,14 @@ export default function LoginPage() {
     await performLogin(data.email, data.password)
   }
 
-  const handleSelectAccount = (accountType: '1' | '2') => {
+  const handleSelectAccount = (accountType: '1' | '2' | 'admin') => {
     setSelectedAccount(accountType)
-    setValue('email', `${accountType}@a.com`)
+    setIsManualInput(false)
+    if (accountType === 'admin') {
+      setValue('email', 'admin@a.com')
+    } else {
+      setValue('email', `${accountType}@a.com`)
+    }
     setValue('password', '')
     // Focus password field immediately
     setTimeout(() => {
@@ -222,10 +228,91 @@ export default function LoginPage() {
                   <p className="text-[11px] text-slate-400 font-medium mt-0.5">โรงงาน 2 (Plant 2)</p>
                 </button>
               </div>
+
+              {/* Admin Card */}
+              <button
+                type="button"
+                onClick={() => handleSelectAccount('admin')}
+                className={`w-full mt-2.5 p-3 rounded-2xl border text-left transition-all duration-200 active:scale-[0.98] flex items-center justify-between overflow-hidden relative ${
+                  selectedAccount === 'admin'
+                    ? 'bg-gradient-to-r from-amber-950/70 via-yellow-950/40 to-slate-900/90 border-amber-400/80 shadow-[0_0_20px_rgba(245,158,11,0.25)] text-white'
+                    : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:text-amber-300 hover:border-amber-500/40 hover:bg-slate-900/60'
+                }`}
+              >
+                {selectedAccount === 'admin' && (
+                  <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500" />
+                )}
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors text-base ${
+                    selectedAccount === 'admin'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs'
+                      : 'bg-slate-800/80 text-amber-400/70 border border-slate-700/60'
+                  }`}>
+                    👑
+                  </div>
+                  <div>
+                    <div className="text-xs font-extrabold uppercase tracking-wide text-white flex items-center gap-1.5">
+                      <span>ผู้ดูแลระบบ (Admin)</span>
+                      <span className="text-[10px] font-bold text-amber-400 bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.2 rounded">
+                        Full Access
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                      เข้าถึงทุกโรงงาน ปรับแก้สถานะ และจัดการระบบทั้งหมด
+                    </p>
+                  </div>
+                </div>
+                <div className="flex-shrink-0">
+                  {selectedAccount === 'admin' ? (
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-500/30">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      เลือกอยู่
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold text-slate-400 border border-slate-800 px-2 py-0.5 rounded-lg bg-slate-900/80">
+                      แตะเพื่อเลือก
+                    </span>
+                  )}
+                </div>
+              </button>
+
+              {/* Account Identifier & Manual Toggle */}
+              <div className="flex items-center justify-between pt-2 px-1">
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {selectedAccount === 'admin'
+                    ? 'บัญชี: admin@a.com'
+                    : selectedAccount === '2'
+                    ? 'บัญชี: 2@a.com (HET-2)'
+                    : 'บัญชี: 1@a.com (HET-1)'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsManualInput(!isManualInput)}
+                  className="text-[10px] text-blue-400 hover:text-blue-300 underline font-medium"
+                >
+                  {isManualInput ? 'ปิดช่องพิมพ์อีเมล' : 'พิมพ์อีเมลเอง'}
+                </button>
+              </div>
+
+              {isManualInput && (
+                <div className="mt-2 space-y-1">
+                  <label className="block text-[11px] font-semibold text-slate-300">
+                    พิมพ์อีเมลหรือชื่อผู้ใช้โดยตรง
+                  </label>
+                  <input
+                    {...register('email')}
+                    placeholder="เช่น admin@a.com, 1@a.com, 2@a.com"
+                    className="w-full bg-slate-950/70 border border-slate-700/80 text-white placeholder-slate-500 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-cyan-400 transition-all font-mono"
+                  />
+                  {errors.email && (
+                    <p className="text-red-400 text-xs mt-1 font-medium">{errors.email.message}</p>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Email (Auto-filled by selecting factory) */}
-            <input type="hidden" {...register('email')} />
+            {/* Email (Hidden when not in manual mode) */}
+            {!isManualInput && <input type="hidden" {...register('email')} />}
 
             {/* Password Section */}
             <div className="pt-1">
@@ -239,7 +326,13 @@ export default function LoginPage() {
                   {...register('password')}
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
-                  placeholder="กรุณากรอกรหัสผ่าน"
+                  placeholder={
+                    selectedAccount === 'admin'
+                      ? 'กรุณากรอกรหัสผ่าน Admin'
+                      : selectedAccount === '2'
+                      ? 'กรุณากรอกรหัสผ่าน HET-2'
+                      : 'กรุณากรอกรหัสผ่าน HET-1'
+                  }
                   className="w-full bg-slate-950/70 border border-slate-700/80 text-white placeholder-slate-500 rounded-xl px-4 py-3 pl-10 pr-10 text-sm focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-inner"
                 />
                 <button
@@ -273,7 +366,13 @@ export default function LoginPage() {
                   </span>
                 ) : (
                   <>
-                    <span className="text-sm font-bold tracking-wide">เข้าสู่ระบบ</span>
+                    <span className="text-sm font-bold tracking-wide">
+                      {selectedAccount === 'admin'
+                        ? 'เข้าสู่ระบบ (Admin)'
+                        : selectedAccount === '2'
+                        ? 'เข้าสู่ระบบ (HET-2)'
+                        : 'เข้าสู่ระบบ (HET-1)'}
+                    </span>
                     <ArrowRight size={17} className="transition-transform duration-300 group-hover:translate-x-1" />
                   </>
                 )}
