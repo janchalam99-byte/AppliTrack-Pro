@@ -47,17 +47,17 @@ export default function LoginPage() {
     } else if (email === '2@a.com') {
       if (pass === '2') pass = '222222'
     } else if (email === 'admin@a.com') {
-      if (pass === 'admin' || pass === 'admin1234') pass = 'admin888'
+      if (pass === '3' || pass === '333333' || pass === 'admin' || pass === 'admin1234' || pass === 'admin888') pass = '333333'
     }
 
     setIsLoading(true)
     let { error } = await signIn(email, pass)
     
-    // Fallback: If 111111/222222 fails, try password123 as fallback
-    if (error && (pass === '111111' || pass === '222222')) {
+    // Fallback: If 111111/222222/333333 fails, try password123 as fallback
+    if (error && (pass === '111111' || pass === '222222' || pass === '333333')) {
       const retry = await signIn(email, 'password123')
       error = retry.error
-    } else if (error && email === 'admin@a.com' && pass !== 'admin888') {
+    } else if (error && email === 'admin@a.com') {
       const retry = await signIn('admin@a.com', 'admin888')
       error = retry.error
     }
@@ -328,10 +328,10 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   placeholder={
                     selectedAccount === 'admin'
-                      ? 'กรุณากรอกรหัสผ่าน Admin'
+                      ? 'กรุณากรอกรหัสผ่าน Super Admin (รหัส 3)'
                       : selectedAccount === '2'
-                      ? 'กรุณากรอกรหัสผ่าน HET-2'
-                      : 'กรุณากรอกรหัสผ่าน HET-1'
+                      ? 'กรุณากรอกรหัสผ่าน HET-2 (รหัส 2)'
+                      : 'กรุณากรอกรหัสผ่าน HET-1 (รหัส 1)'
                   }
                   className="w-full bg-slate-950/70 border border-slate-700/80 text-white placeholder-slate-500 rounded-xl px-4 py-3 pl-10 pr-10 text-sm focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-inner"
                 />
