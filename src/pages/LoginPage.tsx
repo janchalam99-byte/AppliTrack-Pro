@@ -104,42 +104,45 @@ export default function LoginPage() {
           <h2 className="text-lg font-bold text-white mb-5">เข้าสู่ระบบ</h2>
           
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Quick 1-tap Factory Account Selector */}
-            <div className="bg-[#0f172a]/70 border border-slate-700/80 rounded-2xl p-3 mb-2">
-              <p className="text-[11px] font-semibold text-slate-300 mb-2 flex items-center justify-between">
-                <span>🏭 แตะเลือกบัญชีโรงงาน:</span>
-                <span className="text-[10px] text-slate-400">แตะแล้วใส่รหัสผ่าน</span>
-              </p>
-              <div className="grid grid-cols-2 gap-2">
+            {/* Factory Selector */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-2">
+                เลือกหน่วยงาน / สาขา
+              </label>
+              <div className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
                   onClick={() => handleSelectAccount('1')}
-                  className={`p-3 rounded-xl border text-left transition-all active:scale-95 ${
+                  className={`p-3 rounded-2xl border text-left transition-all active:scale-[0.98] ${
                     selectedAccount === '1'
-                      ? 'bg-blue-600/25 border-blue-400 ring-2 ring-blue-500/30'
-                      : 'bg-slate-900/60 border-slate-700/80 hover:bg-slate-800'
+                      ? 'bg-blue-600/20 border-blue-500 text-white shadow-lg shadow-blue-500/10'
+                      : 'bg-slate-900/60 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
                   }`}
                 >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-base select-none">🏭</span>
-                    <span className="text-sm font-extrabold text-white">HET-1</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-white">HET-1</span>
+                    {selectedAccount === '1' && (
+                      <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                    )}
                   </div>
-                  <p className="text-[10px] text-blue-300/80 mt-0.5">โรงงาน 1 (รหัส: 1)</p>
+                  <p className="text-[11px] text-slate-400">โรงงาน 1 (Plant 1)</p>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSelectAccount('2')}
-                  className={`p-3 rounded-xl border text-left transition-all active:scale-95 ${
+                  className={`p-3 rounded-2xl border text-left transition-all active:scale-[0.98] ${
                     selectedAccount === '2'
-                      ? 'bg-indigo-600/25 border-indigo-400 ring-2 ring-indigo-500/30'
-                      : 'bg-slate-900/60 border-slate-700/80 hover:bg-slate-800'
+                      ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10'
+                      : 'bg-slate-900/60 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
                   }`}
                 >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-base select-none">🏭</span>
-                    <span className="text-sm font-extrabold text-white">HET-2</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-white">HET-2</span>
+                    {selectedAccount === '2' && (
+                      <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                    )}
                   </div>
-                  <p className="text-[10px] text-indigo-300/80 mt-0.5">โรงงาน 2 (รหัส: 2)</p>
+                  <p className="text-[11px] text-slate-400">โรงงาน 2 (Plant 2)</p>
                 </button>
               </div>
             </div>
@@ -148,29 +151,29 @@ export default function LoginPage() {
             <input type="hidden" {...register('email')} />
 
             {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                รหัสผ่านสำหรับ <span className="font-bold text-white">{selectedAccount === '1' ? 'HET-1 (รหัสคือ 1)' : 'HET-2 (รหัสคือ 2)'}</span>
+            <div className="pt-1">
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                รหัสผ่าน
               </label>
               <div className="relative">
-                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input
                   {...register('password')}
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
-                  placeholder={selectedAccount === '1' ? 'ใส่เลข 1 แล้วกดเข้าสู่ระบบ' : 'ใส่เลข 2 แล้วกดเข้าสู่ระบบ'}
-                  className="w-full bg-[#0f172a] border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-3 pl-9 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="กรุณากรอกรหัสผ่าน"
+                  className="w-full bg-[#0f172a] border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-3 pl-10 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
               {errors.password && (
-                <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>
+                <p className="text-red-400 text-xs mt-1.5">{errors.password.message}</p>
               )}
             </div>
 
