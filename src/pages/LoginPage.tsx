@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
 const schema = z.object({
-  email: z.string().email('กรุณากรอกอีเมลให้ถูกต้อง'),
+  email: z.string().min(1, 'กรุณากรอกอีเมลหรือเลขบัญชี (1 หรือ 2)'),
   password: z.string().min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'),
 })
 
@@ -19,18 +19,18 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showGuide, setShowGuide] = useState(!isConfigured)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
-  const onSubmit = async (data: FormData) => {
-    if (!isConfigured) {
-      toast.error('กรุณาตั้งค่า VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env ก่อนเข้าใช้งาน')
-      setShowGuide(true)
-      return
-    }
+  const performLogin = async (rawEmail: string, pass: string) => {
+    let email = rawEmail.trim()
+    if (email === '1') email = '1@a.com'
+    else if (email === '2') email = '2@a.com'
+    else if (!email.includes('@')) email = `${email}@a.com`
+
     setIsLoading(true)
-    const { error } = await signIn(data.email, data.password)
+    const { error } = await signIn(email, pass)
     setIsLoading(false)
     if (error) {
       const msg = error.message.includes('Invalid') 
@@ -38,6 +38,21 @@ export default function LoginPage() {
         : `เข้าสู่ระบบไม่สำเร็จ: ${error.message}`
       toast.error(msg)
     }
+  }
+
+  const onSubmit = async (data: FormData) => {
+    if (!isConfigured) {
+      toast.error('กรุณาตั้งค่า VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env ก่อนเข้าใช้งาน')
+      setShowGuide(true)
+      return
+    }
+    await performLogin(data.email, data.password)
+  }
+
+  const handleQuickLogin = async (accountNum: '1' | '2') => {
+    setValue('email', `${accountNum}@a.com`)
+    setValue('password', 'password123')
+    await performLogin(`${accountNum}@a.com`, 'password123')
   }
 
   return (
@@ -65,19 +80,51 @@ export default function LoginPage() {
           <h2 className="text-lg font-bold text-white mb-5">เข้าสู่ระบบ</h2>
           
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {/* Quick 1-tap Account Switcher */}
+            <div className="bg-[#0f172a]/70 border border-slate-700/80 rounded-2xl p-3 mb-2">
+              <p className="text-[11px] font-semibold text-slate-300 mb-2 flex items-center justify-between">
+                <span>⚡ เลือกบัญชีด่วน (คลิกเดียวเข้าสู่ระบบ):</span>
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('1')}
+                  disabled={isLoading}
+                  className="p-2.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 active:scale-95 border border-blue-500/30 text-left transition-all group"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                    <span className="text-xs font-bold text-white group-hover:text-blue-300">บัญชี 1 (HET-2)</span>
+                  </div>
+                  <p className="text-[10px] text-blue-300/70 font-mono mt-0.5">1@a.com</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('2')}
+                  disabled={isLoading}
+                  className="p-2.5 rounded-xl bg-indigo-600/15 hover:bg-indigo-600/25 active:scale-95 border border-indigo-500/30 text-left transition-all group"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
+                    <span className="text-xs font-bold text-white group-hover:text-indigo-300">บัญชี 2 (HET-1)</span>
+                  </div>
+                  <p className="text-[10px] text-indigo-300/70 font-mono mt-0.5">2@a.com</p>
+                </button>
+              </div>
+            </div>
+
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                อีเมล
+                อีเมล หรือเลขบัญชี (1 หรือ 2)
               </label>
               <div className="relative">
                 <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input
                   {...register('email')}
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  placeholder="example@email.com"
+                  type="text"
+                  autoComplete="username"
+                  placeholder="1 หรือ 1@a.com"
                   className="w-full bg-[#0f172a] border border-slate-700 text-white placeholder-slate-600 rounded-xl px-4 py-3 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
               </div>
