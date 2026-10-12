@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { 
   Eye, EyeOff, Lock, AlertTriangle, ExternalLink, 
-  Zap, Factory, Layers, ArrowRight, Sparkles, ShieldCheck 
+  Zap, Factory, Layers, ArrowRight, ShieldCheck 
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
@@ -95,14 +95,6 @@ export default function LoginPage() {
     }, 50)
   }
 
-  const handleQuickFillPassword = () => {
-    const quickPass = selectedAccount === '2' ? '222222' : '111111'
-    setValue('password', quickPass)
-    toast.success(`กรอกรหัสผ่าน ${quickPass} เรียบร้อย`, { id: 'quick-pass', duration: 1500 })
-    setTimeout(() => {
-      setFocus('password')
-    }, 50)
-  }
 
   return (
     <div className="min-h-screen bg-[#090d16] bg-tech-grid flex flex-col items-center justify-center px-4 py-8 sm:py-12 relative overflow-hidden font-sans">
@@ -237,21 +229,9 @@ export default function LoginPage() {
 
             {/* Password Section */}
             <div className="pt-1">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-slate-300">
-                  รหัสผ่าน
-                </label>
-                {/* One-click quick fill pill */}
-                <button
-                  type="button"
-                  onClick={handleQuickFillPassword}
-                  className="text-[11px] text-cyan-300 hover:text-cyan-200 transition-colors flex items-center gap-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-2 py-0.5 rounded-lg active:scale-95"
-                  title="คลิกเพื่อใส่รหัสผ่านด่วน"
-                >
-                  <Sparkles size={11} className="text-cyan-400" />
-                  <span>ใส่รหัสด่วน ({selectedAccount === '2' ? '222222' : '111111'})</span>
-                </button>
-              </div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                รหัสผ่าน
+              </label>
 
               <div className="relative">
                 <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 transition-colors pointer-events-none" />
