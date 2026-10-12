@@ -481,7 +481,10 @@ export default function CreateRequestPage() {
         </div>
 
         {/* STEP 1: ของอะไร & จำนวนเท่าไร */}
-        <div className="bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-4 shadow-lg backdrop-blur-md">
+        <div className={cn(
+          "bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-4 shadow-lg backdrop-blur-md relative transition-all",
+          showSuggestions && suggestions.length > 0 ? "z-40" : "z-20"
+        )}>
           <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
             <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center text-xs font-bold">1</span>
             <h2 className="text-sm font-bold text-white">ระบุสิ่งของ & จำนวนที่ส่ง</h2>
@@ -566,7 +569,7 @@ export default function CreateRequestPage() {
           </div>
 
           {/* Optional App No. with Instant Search */}
-          <div ref={searchBoxRef} className="space-y-1.5 relative pt-1 border-t border-slate-800/80">
+          <div ref={searchBoxRef} className="space-y-1.5 relative pt-1 border-t border-slate-800/80 z-30">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
                 <Search size={12} className="text-blue-400" />
@@ -591,18 +594,29 @@ export default function CreateRequestPage() {
 
             {/* Suggestions Dropdown */}
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-slate-900 border border-blue-500/40 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto divide-y divide-slate-800">
+              <div className="absolute top-full left-0 right-0 z-50 mt-1.5 bg-[#0f172a] border border-cyan-500/50 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] overflow-hidden max-h-60 overflow-y-auto divide-y divide-slate-800 ring-1 ring-white/15">
                 {suggestions.map((item, idx) => (
                   <div
                     key={`${item.appNo}-${item.terminalName}-${idx}`}
                     onClick={() => handleSelectApplicator(item)}
-                    className="p-2.5 hover:bg-slate-800/80 cursor-pointer transition-colors flex items-center justify-between text-left group"
+                    className="p-3 hover:bg-slate-800/90 cursor-pointer transition-colors flex items-center justify-between text-left group"
                   >
                     <div>
-                      <span className="font-mono text-xs font-bold text-cyan-300">{item.appNo}</span>
-                      <p className="text-xs text-white group-hover:text-cyan-200">{item.terminalName}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-cyan-300 bg-cyan-950/70 px-2 py-0.5 rounded border border-cyan-500/30">
+                          {item.appNo}
+                        </span>
+                        {item.baseLocation && (
+                          <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+                            📍 {item.baseLocation}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-white group-hover:text-cyan-200 mt-1 font-medium">{item.terminalName}</p>
                     </div>
-                    <span className="text-[10px] text-slate-500 group-hover:text-white bg-slate-800 px-2 py-0.5 rounded">เลือก</span>
+                    <span className="text-[10px] font-bold text-cyan-400 group-hover:text-white bg-cyan-500/10 group-hover:bg-cyan-500 px-2.5 py-1 rounded-lg border border-cyan-500/30 transition-all">
+                      เลือก
+                    </span>
                   </div>
                 ))}
               </div>
@@ -611,7 +625,7 @@ export default function CreateRequestPage() {
         </div>
 
         {/* STEP 2: ส่งจากที่ไหน ไปที่ไหน (HET 1 ส่ง HET 2 รับ | HET 2 ส่ง HET 1 รับ) */}
-        <div className="bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-3.5 shadow-lg backdrop-blur-md">
+        <div className="bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-3.5 shadow-lg backdrop-blur-md relative z-10">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
             <div className="flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-xs font-bold">2</span>
@@ -735,7 +749,7 @@ export default function CreateRequestPage() {
         </div>
 
         {/* STEP 3: ส่งให้ใคร & ผู้ส่งของ */}
-        <div className="bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-4 shadow-lg backdrop-blur-md">
+        <div className="bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-4 shadow-lg backdrop-blur-md relative z-0">
           <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
             <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center text-xs font-bold">3</span>
             <h2 className="text-sm font-bold text-white">ส่งให้ใคร (ผู้รับปลายทาง) & ผู้ส่ง</h2>
@@ -864,7 +878,7 @@ export default function CreateRequestPage() {
         </div>
 
         {/* STEP 4: ตัวเลือกการฝากของขึ้นรถ */}
-        <div className="bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-3 shadow-lg backdrop-blur-md">
+        <div className="bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-3 shadow-lg backdrop-blur-md relative z-0">
           <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
             <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center text-xs font-bold">4</span>
             <h2 className="text-sm font-bold text-white">การนำส่งขึ้นรถ</h2>
