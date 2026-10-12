@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, Package, Clock, Truck, CheckCircle, AlertTriangle,
   Camera, RefreshCw, ChevronDown, ChevronUp, MapPin, User, Calendar,
-  X, AlertCircle, BookOpen, RotateCcw
+  X, AlertCircle, BookOpen, RotateCcw, Trash2, Edit3, ShieldAlert, Save
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -76,6 +76,131 @@ export default function RequestDetailPage() {
     qc.invalidateQueries({ queryKey: ['request', id] })
     qc.invalidateQueries({ queryKey: ['requests'] })
     qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+  }
+
+  // Admin Controls State
+  const [showAdminPanel, setShowAdminPanel] = useState(false)
+  const [isAdminEditing, setIsAdminEditing] = useState(false)
+  const [adminEditTitle, setAdminEditTitle] = useState('')
+  const [adminEditTerminal, setAdminEditTerminal] = useState('')
+  const [adminEditAppNo, setAdminEditAppNo] = useState('')
+  const [adminEditSenderStaff, setAdminEditSenderStaff] = useState('')
+  const [adminEditRemarkBase, setAdminEditRemarkBase] = useState('')
+  const [adminEditNotes, setAdminEditNotes] = useState('')
+  const [adminOverrideStatus, setAdminOverrideStatus] = useState<RequestStatus | ''>('')
+  const [adminOverrideNotes, setAdminOverrideNotes] = useState('')
+  const [isAdminOperating, setIsAdminOperating] = useState(false)
+
+  const startAdminEdit = () => {
+    if (!request) return
+    setAdminEditTitle(request.title || '')
+    setAdminEditTerminal(request.terminal_name || '')
+    setAdminEditAppNo(request.app_no || '')
+    setAdminEditRemarkBase(request.remark_base || '')
+    setAdminEditSenderStaff(request.sender_staff_name || '')
+    setAdminEditNotes(request.notes || '')
+    setIsAdminEditing(true)
+  }
+
+  const handleAdminSaveEdit = async () => {
+    if (!profile || profile.role !== 'admin' || !request) return
+    setIsAdminOperating(true)
+    try {
+      const { error } = await supabase
+        .from('transfer_requests')
+        .update({
+          title: adminEditTitle.trim() || request.title,
+          terminal_name: adminEditTerminal.trim() || null,
+          app_no: adminEditAppNo.trim() || null,
+          remark_base: adminEditRemarkBase.trim() || null,
+          sender_staff_name: adminEditSenderStaff.trim() || null,
+          notes: adminEditNotes.trim() || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', request.id)
+
+      if (error) throw error
+      toast.success('บันทึกการแก้ไขข้อมูลสำเร็จ')
+      setIsAdminEditing(false)
+      invalidate()
+    } catch (e: any) {
+      toast.error(`แก้ไขไม่สำเร็จ: ${e.message}`)
+    } finally {
+      setIsAdminOperating(false)
+    }
+  }
+
+  const handleAdminOverrideStatusSubmit = async () => {
+    if (!profile || profile.role !== 'admin' || !request || !adminOverrideStatus) return
+    setIsAdminOperating(true)
+    try {
+      const { error } = await supabase
+        .from('transfer_requests')
+        .update({
+          status: adminOverrideStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', request.id)
+
+      if (error) throw error
+
+      await supabase.from('status_history').insert({
+        request_id: request.id,
+        from_status: request.status,
+        to_status: adminOverrideStatus,
+        changed_by: profile.id,
+        notes: adminOverrideNotes ? `[Admin ปรับสถานะ] ${adminOverrideNotes}` : '[ผู้ดูแลระบบปรับเปลี่ยนสถานะโดยตรง]',
+      })
+
+      toast.success(`ปรับสถานะเป็น "${STATUS_LABELS[adminOverrideStatus] || adminOverrideStatus}" สำเร็จ`)
+      setAdminOverrideStatus('')
+      setAdminOverrideNotes('')
+      invalidate()
+    } catch (e: any) {
+      toast.error(`ปรับสถานะไม่สำเร็จ: ${e.message}`)
+    } finally {
+      setIsAdminOperating(false)
+    }
+  }
+
+  const handleAdminDelete = async () => {
+    if (!profile || profile.role !== 'admin' || !request) return
+    const confirmed = window.confirm(
+      `⚠️ คำเตือนจากระบบ (เฉพาะ Admin):\n\nคุณแน่ใจหรือไม่ว่าต้องการลบใบงาน "${request.request_number}" (${request.terminal_name || request.title}) ออกจากระบบ?\n\n* รายการสิ่งของ ประวัติสถานะ และรูปภาพหลักฐานทั้งหมดจะถูกลบถาวร ไม่สามารถกู้คืนได้`
+    )
+    if (!confirmed) return
+
+    setIsAdminOperating(true)
+    try {
+      const { error } = await supabase
+        .from('transfer_requests')
+        .delete()
+        .eq('id', request.id)
+
+      if (error) throw error
+
+      toast.success('ลบใบงานและประวัติเรียบร้อยแล้ว')
+      invalidate()
+      qc.invalidateQueries({ queryKey: ['history'] })
+      navigate('/requests')
+    } catch (e: any) {
+      toast.error(`ลบไม่สำเร็จ: ${e.message}`)
+    } finally {
+      setIsAdminOperating(false)
+    }
+  }
+
+  const handleAdminDeleteHistoryItem = async (historyId: string) => {
+    if (!profile || profile.role !== 'admin') return
+    if (!window.confirm('ต้องการลบบันทึกประวัตินี้ใช่หรือไม่?')) return
+    try {
+      const { error } = await supabase.from('status_history').delete().eq('id', historyId)
+      if (error) throw error
+      toast.success('ลบบันทึกประวัติสำเร็จ')
+      invalidate()
+    } catch (e: any) {
+      toast.error(`ลบไม่สำเร็จ: ${e.message}`)
+    }
   }
 
   const changeStatus = async (newStatus: RequestStatus, notes?: string) => {
@@ -537,6 +662,210 @@ export default function RequestDetailPage() {
         </div>
       </div>
 
+      {/* Admin Control Panel (Only visible for admin role) */}
+      {profile?.role === 'admin' && (
+        <div className="bg-gradient-to-br from-amber-500/10 via-slate-800 to-slate-900 border border-amber-500/30 rounded-2xl p-4 shadow-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl select-none">👑</span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-white">การจัดการสำหรับ Admin</h2>
+                  <span className="text-[10px] bg-amber-500/25 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md font-mono font-bold">
+                    SUPER ADMIN
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">แก้ไขข้อมูล, ปรับเปลี่ยนสถานะ, หรือลบประวัติ</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAdminPanel(!showAdminPanel)}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            >
+              <span>{showAdminPanel ? 'ซ่อนเมนู' : 'เปิดเมนูจัดการ'}</span>
+              {showAdminPanel ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+          </div>
+
+          {showAdminPanel && (
+            <div className="space-y-4 mt-4 pt-4 border-t border-amber-500/20">
+              {/* Option 1: Edit info */}
+              <div className="bg-slate-900/60 rounded-xl p-3 border border-slate-700/60">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                    <Edit3 size={14} className="text-blue-400" />
+                    <span>แก้ไขข้อมูลใบงาน (Edit Details)</span>
+                  </div>
+                  {!isAdminEditing && (
+                    <button
+                      type="button"
+                      onClick={startAdminEdit}
+                      className="text-xs bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 px-2.5 py-1 rounded-lg transition-all active:scale-95"
+                    >
+                      แก้ไขข้อมูล
+                    </button>
+                  )}
+                </div>
+
+                {isAdminEditing ? (
+                  <div className="space-y-2.5 mt-2">
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">หัวข้อรายการ</label>
+                      <input
+                        value={adminEditTitle}
+                        onChange={e => setAdminEditTitle(e.target.value)}
+                        className="input-field text-xs"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] text-slate-400 block mb-1">เบอร์เทอร์มินอล (Terminal)</label>
+                        <input
+                          value={adminEditTerminal}
+                          onChange={e => setAdminEditTerminal(e.target.value)}
+                          className="input-field text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-400 block mb-1">เบอร์ App (App No)</label>
+                        <input
+                          value={adminEditAppNo}
+                          onChange={e => setAdminEditAppNo(e.target.value)}
+                          className="input-field text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] text-slate-400 block mb-1">ฐาน App (Remark Base)</label>
+                        <input
+                          value={adminEditRemarkBase}
+                          onChange={e => setAdminEditRemarkBase(e.target.value)}
+                          className="input-field text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-400 block mb-1">ชื่อผู้รับ-ส่ง (Sender Staff)</label>
+                        <input
+                          value={adminEditSenderStaff}
+                          onChange={e => setAdminEditSenderStaff(e.target.value)}
+                          className="input-field text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">หมายเหตุเพิ่มเติม</label>
+                      <textarea
+                        value={adminEditNotes}
+                        onChange={e => setAdminEditNotes(e.target.value)}
+                        rows={2}
+                        className="input-field text-xs resize-none"
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleAdminSaveEdit}
+                        disabled={isAdminOperating}
+                        className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        <Save size={13} />
+                        <span>{isAdminOperating ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAdminEditing(false)}
+                        className="px-3 py-2 rounded-xl bg-slate-800 text-slate-400 text-xs hover:text-white"
+                      >
+                        ยกเลิก
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400">
+                    แก้ไขชื่อเทอร์มินอล, เบอร์ App, ฐาน App, ผู้ส่ง หรือหมายเหตุได้โดยตรง
+                  </p>
+                )}
+              </div>
+
+              {/* Option 2: Override Status */}
+              <div className="bg-slate-900/60 rounded-xl p-3 border border-slate-700/60">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-white mb-2">
+                  <ShieldAlert size={14} className="text-amber-400" />
+                  <span>ปรับเปลี่ยนสถานะโดยตรง (Override Status)</span>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[11px] text-slate-400 block mb-1">เลือกสถานะใหม่ที่ต้องการบังคับเปลี่ยน</label>
+                    <select
+                      value={adminOverrideStatus}
+                      onChange={e => setAdminOverrideStatus(e.target.value as RequestStatus)}
+                      className="input-field text-xs"
+                    >
+                      <option value="">-- เลือกสถานะใหม่ --</option>
+                      <option value="pending_confirm">รอปลายทางยืนยัน (pending_confirm)</option>
+                      <option value="preparing">กำลังจัดเตรียม (preparing)</option>
+                      <option value="ready_to_send">เตรียมของเสร็จแล้ว (ready_to_send)</option>
+                      <option value="in_transit">ส่งของแล้ว / ขนส่ง (in_transit)</option>
+                      <option value="partially_received">รับของแล้วบางส่วน (partially_received)</option>
+                      <option value="completed">เสร็จสิ้น (completed)</option>
+                      <option value="problem_reported">พบปัญหา (problem_reported)</option>
+                      <option value="returning">กำลังส่งคืน (returning)</option>
+                      <option value="return_in_transit">คืนของอยู่ระหว่างขนส่ง (return_in_transit)</option>
+                      <option value="partially_returned">รับคืนบางส่วน (partially_returned)</option>
+                      <option value="return_completed">คืนของเสร็จสิ้น (return_completed)</option>
+                      <option value="cancelled">ยกเลิกรายการ (cancelled)</option>
+                    </select>
+                  </div>
+                  {adminOverrideStatus && (
+                    <>
+                      <div>
+                        <label className="text-[11px] text-slate-400 block mb-1">เหตุผลในการเปลี่ยนสถานะ (จะบันทึกลงประวัติ)</label>
+                        <input
+                          value={adminOverrideNotes}
+                          onChange={e => setAdminOverrideNotes(e.target.value)}
+                          placeholder="เช่น พนักงานกดสถานะผิดพลาด, แอดมินแก้ไขระบบ"
+                          className="input-field text-xs"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAdminOverrideStatusSubmit}
+                        disabled={isAdminOperating}
+                        className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        {isAdminOperating ? 'กำลังบันทึก...' : `ยืนยันปรับสถานะเป็น "${STATUS_LABELS[adminOverrideStatus] || adminOverrideStatus}"`}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Option 3: Danger Zone - Delete */}
+              <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/30">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-red-400 mb-1">
+                  <Trash2 size={14} />
+                  <span>ลบใบงานและประวัตินี้ถาวร (Danger Zone)</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mb-3">
+                  ลบข้อมูลใบงาน {request.request_number} รายการสิ่งของ ประวัติ และรูปภาพทั้งหมดออกจากฐานข้อมูลถาวร
+                </p>
+                <button
+                  type="button"
+                  onClick={handleAdminDelete}
+                  disabled={isAdminOperating}
+                  className="w-full py-2.5 rounded-xl bg-red-600/80 hover:bg-red-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  <Trash2 size={14} />
+                  <span>{isAdminOperating ? 'กำลังลบข้อมูล...' : 'ลบใบงานและประวัตินี้ถาวร'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Route Info */}
       <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-4">
         <div className="flex items-center gap-3">
@@ -931,12 +1260,24 @@ export default function RequestDetailPage() {
                   )}>
                     {idx === 0 && <div className="w-2 h-2 rounded-full bg-white" />}
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-white">{STATUS_LABELS[h.to_status] ?? h.to_status}</p>
-                    {h.notes && <p className="text-xs text-slate-500 mt-0.5">{h.notes}</p>}
-                    <p className="text-xs text-slate-600 mt-1">
-                      {h.changer?.full_name ?? '-'} · {formatDateTime(h.changed_at)}
-                    </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{STATUS_LABELS[h.to_status] ?? h.to_status}</p>
+                      {h.notes && <p className="text-xs text-slate-500 mt-0.5">{h.notes}</p>}
+                      <p className="text-xs text-slate-600 mt-1">
+                        {h.changer?.full_name ?? '-'} · {formatDateTime(h.changed_at)}
+                      </p>
+                    </div>
+                    {profile?.role === 'admin' && (
+                      <button
+                        type="button"
+                        onClick={() => handleAdminDeleteHistoryItem(h.id)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        title="ลบบันทึกประวัตินี้ (Admin)"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

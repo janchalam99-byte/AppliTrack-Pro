@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Search, Archive, ArrowRight } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Search, Archive, ArrowRight, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import toast from 'react-hot-toast'
 import { cn, formatDate, formatDateTime, STATUS_LABELS, TYPE_LABELS } from '../lib/utils'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -35,6 +37,8 @@ async function fetchHistory(search: string) {
 
 export default function HistoryPage() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
@@ -43,10 +47,34 @@ export default function HistoryPage() {
     queryFn: () => fetchHistory(debouncedSearch),
   })
 
+  const handleDeleteHistory = async (e: React.MouseEvent, req: any) => {
+    e.stopPropagation()
+    if (!profile || profile.role !== 'admin') return
+    if (!window.confirm(`⚠️ คำเตือน (เฉพาะ Admin):\n\nต้องการลบประวัติรายการ "${req.request_number}" (${req.title}) ออกจากระบบถาวรหรือไม่?`)) return
+    try {
+      const { error } = await supabase.from('transfer_requests').delete().eq('id', req.id)
+      if (error) throw error
+      toast.success(`ลบรายการ ${req.request_number} เรียบร้อยแล้ว`)
+      qc.invalidateQueries({ queryKey: ['history'] })
+      qc.invalidateQueries({ queryKey: ['requests'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    } catch (err: any) {
+      toast.error(`ลบไม่สำเร็จ: ${err.message}`)
+    }
+  }
+
   return (
     <div className="p-4 space-y-4">
       <div className="pt-2">
-        <h1 className="text-xl font-bold text-white">ประวัติ</h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-xl font-bold text-white">ประวัติ</h1>
+          {profile?.role === 'admin' && (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+              <span>👑</span>
+              <span>โหมด Admin ลบประวัติได้</span>
+            </span>
+          )}
+        </div>
         <p className="text-slate-500 text-sm mt-0.5">รายการที่เสร็จสิ้นหรือยกเลิกแล้ว</p>
       </div>
 
@@ -78,10 +106,10 @@ export default function HistoryPage() {
       ) : (
         <div className="space-y-2">
           {history.map((req: any) => (
-            <button
+            <div
               key={req.id}
               onClick={() => navigate(`/requests/${req.id}`)}
-              className="w-full bg-slate-800/80 hover:bg-slate-800 border border-slate-700 rounded-2xl p-4 text-left transition-all active:scale-95 touch-feedback"
+              className="w-full bg-slate-800/80 hover:bg-slate-800 border border-slate-700 rounded-2xl p-4 text-left transition-all active:scale-[0.99] touch-feedback cursor-pointer group"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
@@ -101,9 +129,21 @@ export default function HistoryPage() {
                   </p>
                   <p className="text-slate-600 text-[10px] mt-1">{formatDateTime(req.updated_at)}</p>
                 </div>
-                <ArrowRight size={14} className="text-slate-600 mt-1 flex-shrink-0" />
+                <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+                  {profile?.role === 'admin' && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteHistory(e, req)}
+                      className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all active:scale-90"
+                      title="ลบประวัติรายการนี้ (Admin)"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                  <ArrowRight size={14} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
+                </div>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       )}

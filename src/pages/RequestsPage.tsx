@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { 
   Search, Filter, X, ArrowRight, Package, RefreshCw, 
-  LayoutGrid, Table as TableIcon, Sparkles, Tag, User, MapPin
+  LayoutGrid, Table as TableIcon, Sparkles, Tag, User, MapPin, Trash2
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import toast from 'react-hot-toast'
 import { cn, formatDate, formatDateTime, STATUS_LABELS, TYPE_LABELS } from '../lib/utils'
 import type { TransferRequest, RequestStatus } from '../types/database'
 import { useAppStore } from '../store/appStore'
@@ -72,6 +74,8 @@ export default function RequestsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const locations = useAppStore((s) => s.locations)
+  const { profile } = useAuth()
+  const qc = useQueryClient()
 
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
   const [status, setStatus] = useState(searchParams.get('status') ?? 'all')
@@ -79,6 +83,22 @@ export default function RequestsPage() {
   const [locationId, setLocationId] = useState(searchParams.get('location') ?? '')
   const [showFilters, setShowFilters] = useState(false)
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+
+  const handleDeleteRequest = async (e: React.MouseEvent, req: any) => {
+    e.stopPropagation()
+    if (!profile || profile.role !== 'admin') return
+    if (!window.confirm(`⚠️ คำเตือน (เฉพาะ Admin):\n\nต้องการลบใบงาน "${req.request_number}" (${req.terminal_name || req.title}) ออกจากระบบถาวรหรือไม่?`)) return
+    try {
+      const { error } = await supabase.from('transfer_requests').delete().eq('id', req.id)
+      if (error) throw error
+      toast.success(`ลบรายการ ${req.request_number} เรียบร้อยแล้ว`)
+      qc.invalidateQueries({ queryKey: ['requests'] })
+      qc.invalidateQueries({ queryKey: ['history'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    } catch (err: any) {
+      toast.error(`ลบไม่สำเร็จ: ${err.message}`)
+    }
+  }
 
   const filters = { search, status, type, locationId }
 
@@ -257,6 +277,9 @@ export default function RequestsPage() {
                 <th className="py-2.5 px-3">ผู้รับ-ส่ง</th>
                 <th className="py-2.5 px-3">สถานะ</th>
                 <th className="py-2.5 px-3">หมายเหตุ</th>
+                {profile?.role === 'admin' && (
+                  <th className="py-2.5 px-3 text-center">จัดการ</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/60 font-mono text-[11px]">
@@ -286,6 +309,18 @@ export default function RequestsPage() {
                   <td className="py-2 px-3 font-sans text-[10px] text-amber-300/80 truncate max-w-[100px]">
                     {req.remark_base || req.notes || '-'}
                   </td>
+                  {profile?.role === 'admin' && (
+                    <td className="py-2 px-3 text-center whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteRequest(e, req)}
+                        className="p-1 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 border border-red-500/20 transition-all active:scale-90"
+                        title="ลบใบงานนี้ (Admin)"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -359,8 +394,18 @@ export default function RequestsPage() {
                     </div>
                   </div>
 
-                  {/* Right Arrow */}
-                  <div className="flex-shrink-0 pt-2">
+                  {/* Right Actions */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0 pt-2">
+                    {profile?.role === 'admin' && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteRequest(e, req)}
+                        className="p-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all active:scale-90"
+                        title="ลบใบงานนี้ (Admin)"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                     <ArrowRight size={15} className="text-slate-600 group-hover:text-white transition-colors" />
                   </div>
                 </div>

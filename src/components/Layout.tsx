@@ -3,6 +3,7 @@ import {
   Home, List, ArrowLeftRight, Bell, Settings, Plus, BookOpen, HardDrive
 } from 'lucide-react'
 import { useAppStore } from '../store/appStore'
+import { useAuth } from '../contexts/AuthContext'
 import { cn } from '../lib/utils'
 
 const navItems = [
@@ -14,6 +15,7 @@ const navItems = [
 ]
 
 export default function Layout() {
+  const { profile } = useAuth()
   const unreadCount = useAppStore((s) => s.unreadCount)
   const navigate = useNavigate()
 
@@ -29,6 +31,12 @@ export default function Layout() {
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-white text-base tracking-tight font-sans">AppliTrack</span>
               <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-400 border border-blue-500/30">PRO</span>
+              {profile?.role === 'admin' && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                  <span>👑</span>
+                  <span>ADMIN</span>
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">

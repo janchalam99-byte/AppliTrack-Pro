@@ -310,6 +310,11 @@ DROP POLICY IF EXISTS "auth_update_requests" ON public.transfer_requests;
 CREATE POLICY "auth_update_requests"
   ON public.transfer_requests FOR UPDATE TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "admin_delete_requests" ON public.transfer_requests;
+CREATE POLICY "admin_delete_requests"
+  ON public.transfer_requests FOR DELETE TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+
 -- Items RLS
 DROP POLICY IF EXISTS "auth_read_items" ON public.transfer_request_items;
 CREATE POLICY "auth_read_items"

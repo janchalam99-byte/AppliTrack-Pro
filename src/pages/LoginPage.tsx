@@ -18,7 +18,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [showGuide, setShowGuide] = useState(!isConfigured)
-  const [selectedAccount, setSelectedAccount] = useState<'1' | '2' | null>('1')
+  const [selectedAccount, setSelectedAccount] = useState<'1' | '2' | 'admin' | null>('1')
 
   const { register, handleSubmit, setValue, setFocus, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -32,14 +32,17 @@ export default function LoginPage() {
     let email = rawEmail.trim().toLowerCase()
     if (email === '1' || email === 'het-1' || email === 'het1') email = '1@a.com'
     else if (email === '2' || email === 'het-2' || email === 'het2') email = '2@a.com'
+    else if (email === 'admin' || email === 'superadmin' || email === 'admin@a.com') email = 'admin@a.com'
     else if (!email.includes('@')) email = `${email}@a.com`
 
-    // Map short password '1' or '2' to Supabase requirement
+    // Map short passwords to Supabase requirement (min 6 chars)
     let pass = rawPass.trim()
     if (email === '1@a.com') {
       if (pass === '1') pass = '111111'
     } else if (email === '2@a.com') {
       if (pass === '2') pass = '222222'
+    } else if (email === 'admin@a.com') {
+      if (pass === 'admin' || pass === 'admin1234') pass = 'admin888'
     }
 
     setIsLoading(true)
@@ -48,6 +51,9 @@ export default function LoginPage() {
     // Fallback: If 111111/222222 fails, try password123 as fallback
     if (error && (pass === '111111' || pass === '222222')) {
       const retry = await signIn(email, 'password123')
+      error = retry.error
+    } else if (error && email === 'admin@a.com' && pass !== 'admin888') {
+      const retry = await signIn('admin@a.com', 'admin888')
       error = retry.error
     }
 
@@ -69,9 +75,13 @@ export default function LoginPage() {
     await performLogin(data.email, data.password)
   }
 
-  const handleSelectAccount = (accountNum: '1' | '2') => {
-    setSelectedAccount(accountNum)
-    setValue('email', `${accountNum}@a.com`)
+  const handleSelectAccount = (accountType: '1' | '2' | 'admin') => {
+    setSelectedAccount(accountType)
+    if (accountType === 'admin') {
+      setValue('email', 'admin@a.com')
+    } else {
+      setValue('email', `${accountType}@a.com`)
+    }
     setValue('password', '')
     // Focus password field immediately
     setTimeout(() => {
@@ -104,10 +114,10 @@ export default function LoginPage() {
           <h2 className="text-lg font-bold text-white mb-5">เข้าสู่ระบบ</h2>
           
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Factory Selector */}
+            {/* Factory & Admin Selector */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-2">
-                เลือกหน่วยงาน / สาขา
+                เลือกหน่วยงาน / บทบาทผู้ใช้งาน
               </label>
               <div className="grid grid-cols-2 gap-2.5">
                 <button
@@ -145,6 +155,31 @@ export default function LoginPage() {
                   <p className="text-[11px] text-slate-400">โรงงาน 2 (Plant 2)</p>
                 </button>
               </div>
+
+              {/* Admin Button */}
+              <button
+                type="button"
+                onClick={() => handleSelectAccount('admin')}
+                className={`w-full mt-2.5 p-3 rounded-2xl border text-left transition-all active:scale-[0.98] flex items-center justify-between ${
+                  selectedAccount === 'admin'
+                    ? 'bg-amber-500/20 border-amber-500 text-white shadow-lg shadow-amber-500/10'
+                    : 'bg-slate-900/50 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base select-none">👑</span>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-white">ผู้ดูแลระบบ</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Admin</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">แก้ไข/ลบประวัติ และจัดการทุกโรงงาน</p>
+                  </div>
+                </div>
+                {selectedAccount === 'admin' && (
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                )}
+              </button>
             </div>
 
             {/* Email (Auto-filled by selecting factory) */}
