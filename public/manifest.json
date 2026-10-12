@@ -1,0 +1,26 @@
+{
+  "name": "AppliTrack Pro - ระบบติดตามรับ-ส่งเครื่องมือ",
+  "short_name": "AppliTrack",
+  "description": "AppliTrack Pro - ระบบจัดการรับ-ส่งของ ฝากของ และยืม-คืน Applicator ข้ามโรงงาน",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "categories": ["productivity", "business", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

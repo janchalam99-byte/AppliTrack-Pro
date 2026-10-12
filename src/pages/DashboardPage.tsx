@@ -1,0 +1,319 @@
+import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { 
+  Clock, Package, Truck, CheckCircle, AlertTriangle, 
+  BookOpen, AlertCircle, ArrowRight, RefreshCw, Compass
+} from 'lucide-react'
+import PwaInstallBanner from '../components/PwaInstallBanner'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import { useAppStore } from '../store/appStore'
+import { cn, formatTimeAgo } from '../lib/utils'
+import type { TransferRequest } from '../types/database'
+
+interface DashboardStats {
+  pending_confirm: number
+  preparing: number
+  ready_to_send: number
+  in_transit: number
+  partially_received: number
+  completed_today: number
+  active_loans: number
+  overdue_loans: number
+  problem_reported: number
+}
+
+interface StatCard {
+  label: string
+  count: number
+  icon: React.ElementType
+  color: string
+  bg: string
+  status: string
+  urgent?: boolean
+}
+
+async function fetchDashboardStats(): Promise<DashboardStats> {
+  const today = new Date().toISOString().split('T')[0]
+
+  const { data: requests } = await supabase
+    .from('transfer_requests')
+    .select('status, type, loan_due_date, items:transfer_request_items(quantity_sent, quantity_returned)')
+
+  const stats: DashboardStats = {
+    pending_confirm: 0,
+    preparing: 0,
+    ready_to_send: 0,
+    in_transit: 0,
+    partially_received: 0,
+    completed_today: 0,
+    active_loans: 0,
+    overdue_loans: 0,
+    problem_reported: 0,
+  }
+
+  requests?.forEach((r: any) => {
+    switch (r.status) {
+      case 'pending_confirm': stats.pending_confirm++; break
+      case 'preparing': stats.preparing++; break
+      case 'ready_to_send': stats.ready_to_send++; break
+      case 'in_transit': stats.in_transit++; break
+      case 'partially_received': stats.partially_received++; break
+      case 'problem_reported': stats.problem_reported++; break
+    }
+    if (r.type === 'loan') {
+      const isActive = !['return_completed', 'cancelled'].includes(r.status)
+      const hasRemaining = r.items?.some((i: any) => i.quantity_returned < i.quantity_sent)
+      if (isActive && hasRemaining) {
+        stats.active_loans++
+        if (r.loan_due_date && r.loan_due_date < today) {
+          stats.overdue_loans++
+        }
+      }
+    }
+  })
+  return stats
+}
+
+async function fetchRecentRequests(): Promise<TransferRequest[]> {
+  const { data } = await supabase
+    .from('transfer_requests')
+    .select(`
+      *,
+      from_location:locations!transfer_requests_from_location_id_fkey(id,name),
+      to_location:locations!transfer_requests_to_location_id_fkey(id,name),
+      requester:profiles!transfer_requests_requester_id_fkey(id,full_name)
+    `)
+    .not('status', 'in', '(completed,return_completed,cancelled)')
+    .order('updated_at', { ascending: false })
+    .limit(5)
+  return (data as any[]) ?? []
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  pending_confirm: 'text-yellow-400',
+  preparing: 'text-blue-400',
+  ready_to_send: 'text-purple-400',
+  in_transit: 'text-sky-400',
+  partially_received: 'text-orange-400',
+  completed: 'text-green-400',
+  problem_reported: 'text-red-400',
+  returning: 'text-indigo-400',
+  return_in_transit: 'text-sky-400',
+  partially_returned: 'text-orange-400',
+  return_completed: 'text-green-400',
+  cancelled: 'text-slate-400',
+}
+
+const STATUS_TH: Record<string, string> = {
+  pending_confirm: 'รอยืนยัน',
+  preparing: 'เตรียมของ',
+  ready_to_send: 'พร้อมฝาก',
+  in_transit: 'ฝากแล้ว',
+  partially_received: 'รับบางส่วน',
+  problem_reported: 'พบปัญหา',
+  returning: 'ส่งคืน',
+  return_in_transit: 'ฝากคืน',
+  partially_returned: 'คืนบางส่วน',
+}
+
+export default function DashboardPage() {
+  const { profile } = useAuth()
+  const locations = useAppStore((s) => s.locations)
+  const navigate = useNavigate()
+
+  const { data: stats, isLoading: statsLoading, refetch } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: fetchDashboardStats,
+    refetchInterval: 30000,
+  })
+
+  const { data: recent, isLoading: recentLoading } = useQuery({
+    queryKey: ['recent-requests'],
+    queryFn: fetchRecentRequests,
+    refetchInterval: 30000,
+  })
+
+  const statCards: StatCard[] = [
+    { label: 'รอยืนยันคำขอ', count: stats?.pending_confirm ?? 0, icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20', status: 'pending_confirm', urgent: (stats?.pending_confirm ?? 0) > 0 },
+    { label: 'กำลังเตรียมของ', count: stats?.preparing ?? 0, icon: Package, color: 'text-blue-400', bg: 'bg-blue-400/10 border-blue-400/20', status: 'preparing' },
+    { label: 'พร้อมฝาก', count: stats?.ready_to_send ?? 0, icon: Package, color: 'text-purple-400', bg: 'bg-purple-400/10 border-purple-400/20', status: 'ready_to_send' },
+    { label: 'รอผู้รับยืนยัน', count: stats?.in_transit ?? 0, icon: Truck, color: 'text-sky-400', bg: 'bg-sky-400/10 border-sky-400/20', status: 'in_transit', urgent: (stats?.in_transit ?? 0) > 0 },
+    { label: 'รับบางส่วน', count: stats?.partially_received ?? 0, icon: AlertTriangle, color: 'text-orange-400', bg: 'bg-orange-400/10 border-orange-400/20', status: 'partially_received' },
+    { label: 'พบปัญหา', count: stats?.problem_reported ?? 0, icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/20', status: 'problem_reported', urgent: (stats?.problem_reported ?? 0) > 0 },
+    { label: 'ยืมอยู่', count: stats?.active_loans ?? 0, icon: BookOpen, color: 'text-indigo-400', bg: 'bg-indigo-400/10 border-indigo-400/20', status: 'loan' },
+    { label: 'เกินกำหนดคืน', count: stats?.overdue_loans ?? 0, icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/20', status: 'overdue', urgent: (stats?.overdue_loans ?? 0) > 0 },
+  ]
+
+  const userLocation = locations.find(l => l.id === profile?.home_location_id)
+  const greeting = new Date().getHours() < 12 ? 'อรุณสวัสดิ์' : new Date().getHours() < 17 ? 'สวัสดีตอนบ่าย' : 'สวัสดีตอนเย็น'
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* Greeting */}
+      <div className="pt-2 flex items-center justify-between">
+        <div>
+          <p className="text-slate-400 text-sm">{greeting} 👋</p>
+          <h1 className="text-xl font-bold text-white">{profile?.full_name ?? 'ผู้ใช้'}</h1>
+          {userLocation && (
+            <p className="text-slate-500 text-xs mt-0.5">📍 {userLocation.name}</p>
+          )}
+        </div>
+        <button
+          onClick={() => refetch()}
+          className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors touch-feedback"
+        >
+          <RefreshCw size={18} />
+        </button>
+      </div>
+
+      {/* PWA Floating Install Banner */}
+      <PwaInstallBanner variant="banner" />
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <button
+          onClick={() => navigate('/requests/new')}
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-500/20"
+        >
+          <Package size={18} />
+          <span>สร้างรายการรับ-ส่ง</span>
+          <ArrowRight size={15} />
+        </button>
+        <button
+          onClick={() => navigate('/tool-journey')}
+          className="bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700/80 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
+        >
+          <Compass size={18} className="text-purple-400" />
+          <span>ประวัติเดินทางเครื่องมือ</span>
+        </button>
+      </div>
+
+      {/* Stats Grid */}
+      <div>
+        <h2 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wide">สรุปสถานะ</h2>
+        <div className="grid grid-cols-2 gap-3">
+          {statsLoading
+            ? Array(8).fill(0).map((_, i) => (
+                <div key={i} className="rounded-2xl border border-slate-700 p-4 shimmer h-24" />
+              ))
+            : statCards.map((card) => (
+                <button
+                  key={card.status}
+                  onClick={() => {
+                    if (card.status === 'loan' || card.status === 'overdue') {
+                      navigate('/loans')
+                    } else {
+                      navigate(`/requests?status=${card.status}`)
+                    }
+                  }}
+                  className={cn(
+                    'rounded-2xl border p-4 text-left transition-all active:scale-95 touch-feedback',
+                    card.bg,
+                    card.urgent && card.count > 0 ? 'ring-1 ring-current' : ''
+                  )}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <card.icon size={18} className={card.color} />
+                    {card.urgent && card.count > 0 && (
+                      <span className="w-2 h-2 rounded-full bg-current pulse-dot" style={{ color: 'currentColor' }} />
+                    )}
+                  </div>
+                  <div className={cn('text-2xl font-bold', card.color)}>{card.count}</div>
+                  <div className="text-xs text-slate-400 mt-0.5 leading-tight">{card.label}</div>
+                </button>
+              ))
+          }
+        </div>
+      </div>
+
+      {/* Recent Activity */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">กิจกรรมล่าสุด</h2>
+          <button
+            onClick={() => navigate('/requests')}
+            className="text-blue-400 text-xs font-medium flex items-center gap-1"
+          >
+            ดูทั้งหมด <ArrowRight size={12} />
+          </button>
+        </div>
+
+        {recentLoading ? (
+          <div className="space-y-3">
+            {Array(3).fill(0).map((_, i) => (
+              <div key={i} className="rounded-2xl bg-slate-800 p-4 shimmer h-20" />
+            ))}
+          </div>
+        ) : !recent?.length ? (
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700 p-8 text-center">
+            <Package size={32} className="mx-auto text-slate-600 mb-2" />
+            <p className="text-slate-500 text-sm">ยังไม่มีรายการ</p>
+            <p className="text-slate-600 text-xs mt-1">กดปุ่มด้านบนเพื่อสร้างรายการแรก</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recent.map((req: any) => {
+              const appNo = req.app_no
+              const terminal = req.terminal_name || req.title
+              const staff = req.sender_staff_name || req.requester?.full_name
+
+              return (
+                <button
+                  key={req.id}
+                  onClick={() => navigate(`/requests/${req.id}`)}
+                  className="w-full bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 rounded-2xl p-3.5 text-left transition-all active:scale-[0.99] touch-feedback shadow-xs group"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {appNo ? (
+                          <span className="text-[11px] font-mono font-bold text-blue-300 bg-blue-500/20 border border-blue-500/30 px-2 py-0.5 rounded-md">
+                            {appNo}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-slate-500">{req.request_number}</span>
+                        )}
+                        <span className={cn(
+                          'text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
+                          `status-${req.status}`
+                        )}>
+                          {STATUS_TH[req.status] ?? req.status}
+                        </span>
+                        {req.remark_base && (
+                          <span className="text-[10px] text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded">
+                            {req.remark_base}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-white text-sm font-bold truncate group-hover:text-blue-300 transition-colors">
+                        {terminal}
+                      </p>
+                      <div className="flex items-center justify-between text-xs text-slate-400 mt-1">
+                        <p className="text-[11px] text-slate-400">
+                          {req.from_location?.name} → {req.to_location?.name}
+                        </p>
+                        {staff && (
+                          <p className="text-[10px] font-semibold text-purple-300">
+                            {staff}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <ArrowRight size={14} className="text-slate-600 group-hover:text-white mt-1 transition-colors" />
+                      <p className="text-slate-500 text-[10px] mt-2">{formatTimeAgo(req.updated_at)}</p>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom spacer */}
+      <div className="h-4" />
+    </div>
+  )
+}
