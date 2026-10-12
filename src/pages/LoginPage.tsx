@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, Lock, Mail, Package } from 'lucide-react'
+import { Eye, EyeOff, Lock, Mail, Package, AlertTriangle, ExternalLink } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showGuide, setShowGuide] = useState(!isConfigured)
   const [selectedAccount, setSelectedAccount] = useState<'1' | '2' | 'admin' | null>('1')
+  const [isSupabasePaused, setIsSupabasePaused] = useState(false)
 
   const { register, handleSubmit, setValue, setFocus, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -59,10 +60,16 @@ export default function LoginPage() {
 
     setIsLoading(false)
     if (error) {
+      const errStr = (error.message || '').toLowerCase()
+      if (errStr.includes('fetch') || errStr.includes('paused') || errStr.includes('upstream') || errStr.includes('connect')) {
+        setIsSupabasePaused(true)
+      }
       const msg = error.message.includes('Invalid') 
         ? 'รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง' 
         : `เข้าสู่ระบบไม่สำเร็จ: ${error.message}`
       toast.error(msg)
+    } else {
+      setIsSupabasePaused(false)
     }
   }
 
@@ -230,6 +237,28 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
+
+        {/* Supabase Paused Notice with Direct 1-Click Restore Link */}
+        {isSupabasePaused && (
+          <div className="mt-4 bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 text-xs text-amber-200 shadow-xl space-y-2.5">
+            <div className="flex items-center gap-2 font-bold text-amber-300 text-sm">
+              <AlertTriangle size={18} className="text-amber-400 flex-shrink-0" />
+              <span>ฐานข้อมูล Supabase อาจกำลังพักชั่วคราว (Paused)</span>
+            </div>
+            <p className="text-slate-300 text-xs leading-relaxed">
+              เนื่องจากแพ็กเกจฟรีไม่มีการใช้งานเกิน 7 วัน ฐานข้อมูลจึงเข้าสู่โหมดพักชั่วคราว (ข้อมูลทั้งหมดปลอดภัย 100%) ท่านสามารถแตะปุ่มด้านล่างเพื่อไปกด "Restore project" ในหน้า Dashboard ปลุกระบบกลับมาได้ใน 1 นาทีครับ
+            </p>
+            <a
+              href="https://supabase.com/dashboard/project/wwvvmjkzrkirbyacpkmt"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all active:scale-95 shadow-md shadow-amber-500/20"
+            >
+              <span>⚡ เปิด Supabase Dashboard เพื่อกด Restore</span>
+              <ExternalLink size={14} />
+            </a>
+          </div>
+        )}
 
         {/* Supabase Setup Notice when not configured */}
         {!isConfigured && (
