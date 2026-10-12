@@ -59,10 +59,15 @@ export default function Layout() {
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-white text-base tracking-tight font-sans">AppliTrack</span>
               <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-sm shadow-cyan-500/20">PRO</span>
-              {profile?.role === 'admin' && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
-                  <span>👑</span>
-                  <span>ADMIN</span>
+              {profile && (
+                <span className={cn(
+                  "text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 font-mono",
+                  profile.email?.includes('2') || profile.home_location_id === '1979ede3-5a7f-4b65-8ccf-de428093458d'
+                    ? "bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-xs"
+                    : "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-xs"
+                )}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                  <span>{profile.email?.includes('2') ? 'HET-2' : profile.role === 'admin' ? 'Admin' : 'HET-1'}</span>
                 </span>
               )}
             </div>

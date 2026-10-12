@@ -47,7 +47,7 @@ async function fetchRequests(filters: {
   }
   if (filters.search) {
     const s = filters.search.trim()
-    query = query.or(`title.ilike.%${s}%,request_number.ilike.%${s}%,app_no.ilike.%${s}%,terminal_name.ilike.%${s}%,sender_staff_name.ilike.%${s}%`)
+    query = query.or(`title.ilike.%${s}%,request_number.ilike.%${s}%,app_no.ilike.%${s}%,terminal_name.ilike.%${s}%,sender_staff_name.ilike.%${s}%,receiver_staff_name.ilike.%${s}%`)
   }
 
   const { data, error } = await query
@@ -246,6 +246,51 @@ export default function RequestsPage() {
         </div>
       )}
 
+      {/* Quick Route / Flow Filter Tabs */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+        <button
+          type="button"
+          onClick={() => { setStatus('all'); setLocationId(''); }}
+          className={cn(
+            'px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all text-xs border',
+            status === 'all' && !locationId
+              ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20'
+              : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-white'
+          )}
+        >
+          ทั้งหมด
+        </button>
+        <button
+          type="button"
+          onClick={() => { setStatus('in_transit'); }}
+          className={cn(
+            'px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all text-xs border flex items-center gap-1',
+            status === 'in_transit'
+              ? 'bg-sky-600 text-white border-sky-500 shadow-md shadow-sky-500/20'
+              : 'bg-slate-900/80 text-sky-400/90 border-slate-800 hover:text-sky-300'
+          )}
+        >
+          <span>🚚 รอปลายทางรับ (ค้าง)</span>
+        </button>
+        {locations.map(loc => (
+          <button
+            key={`loc-${loc.id}`}
+            type="button"
+            onClick={() => {
+              setLocationId(locationId === loc.id ? '' : loc.id)
+            }}
+            className={cn(
+              'px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all text-xs border flex items-center gap-1',
+              locationId === loc.id
+                ? 'bg-cyan-600 text-white border-cyan-500 shadow-md shadow-cyan-500/20'
+                : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-white'
+            )}
+          >
+            <span>🏭 {loc.name}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Results Count */}
       <div className="flex items-center justify-between text-xs text-slate-500 px-1">
         <span>{requests?.length ?? 0} รายการ</span>
@@ -272,9 +317,10 @@ export default function RequestsPage() {
             <thead>
               <tr className="bg-slate-900/80 border-b border-slate-700 text-[11px] text-slate-400 font-semibold">
                 <th className="py-2.5 px-3">App No.</th>
-                <th className="py-2.5 px-3">Terminal Name</th>
+                <th className="py-2.5 px-3">Terminal / สิ่งของ</th>
+                <th className="py-2.5 px-3">จำนวน</th>
                 <th className="py-2.5 px-3">เส้นทาง</th>
-                <th className="py-2.5 px-3">ผู้รับ-ส่ง</th>
+                <th className="py-2.5 px-3">ผู้ส่ง ➔ ส่งถึงใคร</th>
                 <th className="py-2.5 px-3">สถานะ</th>
                 <th className="py-2.5 px-3">หมายเหตุ</th>
                 {profile?.role === 'admin' && (
@@ -283,46 +329,62 @@ export default function RequestsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/60 font-mono text-[11px]">
-              {requests.map((req) => (
-                <tr
-                  key={req.id}
-                  onClick={() => navigate(`/requests/${req.id}`)}
-                  className="hover:bg-slate-700/40 cursor-pointer transition-colors"
-                >
-                  <td className="py-2 px-3 font-bold text-blue-400 whitespace-nowrap">
-                    {req.app_no || '-'}
-                  </td>
-                  <td className="py-2 px-3 text-white font-sans truncate max-w-[150px]">
-                    {req.terminal_name || req.title}
-                  </td>
-                  <td className="py-2 px-3 whitespace-nowrap text-slate-400 font-sans text-[10px]">
-                    {req.from_location?.name} → {req.to_location?.name}
-                  </td>
-                  <td className="py-2 px-3 font-sans text-slate-300 font-semibold whitespace-nowrap">
-                    {req.sender_staff_name || req.requester?.full_name || '-'}
-                  </td>
-                  <td className="py-2 px-3 whitespace-nowrap">
-                    <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-sans font-semibold border', STATUS_COLORS[req.status])}>
-                      {STATUS_LABELS[req.status] || req.status}
-                    </span>
-                  </td>
-                  <td className="py-2 px-3 font-sans text-[10px] text-amber-300/80 truncate max-w-[100px]">
-                    {req.remark_base || req.notes || '-'}
-                  </td>
-                  {profile?.role === 'admin' && (
-                    <td className="py-2 px-3 text-center whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteRequest(e, req)}
-                        className="p-1 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 border border-red-500/20 transition-all active:scale-90"
-                        title="ลบใบงานนี้ (Admin)"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+              {requests.map((req) => {
+                const item = req.items?.[0]
+                const qtyText = item ? `${item.quantity_sent} ${item.unit || 'ชุด'}` : '-'
+                return (
+                  <tr
+                    key={req.id}
+                    onClick={() => navigate(`/requests/${req.id}`)}
+                    className="hover:bg-slate-700/40 cursor-pointer transition-colors"
+                  >
+                    <td className="py-2 px-3 font-bold text-blue-400 whitespace-nowrap">
+                      {req.app_no || '-'}
                     </td>
-                  )}
-                </tr>
-              ))}
+                    <td className="py-2 px-3 text-white font-sans truncate max-w-[150px]">
+                      {req.terminal_name || req.title}
+                    </td>
+                    <td className="py-2 px-3 font-sans text-cyan-300 font-bold whitespace-nowrap">
+                      {qtyText}
+                    </td>
+                    <td className="py-2 px-3 whitespace-nowrap font-sans text-[10px]">
+                      <span className={cn(
+                        'px-1.5 py-0.5 rounded font-bold border',
+                        req.from_location?.name?.includes('1')
+                          ? 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+                          : 'bg-purple-500/10 text-purple-300 border-purple-500/30'
+                      )}>
+                        {req.from_location?.name} → {req.to_location?.name}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 font-sans whitespace-nowrap">
+                      <span className="text-purple-300 font-semibold">{req.sender_staff_name || req.requester?.full_name || '-'}</span>
+                      <span className="text-slate-500 mx-1">➔</span>
+                      <span className="text-emerald-300 font-semibold">{req.receiver_staff_name || '-'}</span>
+                    </td>
+                    <td className="py-2 px-3 whitespace-nowrap">
+                      <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-sans font-semibold border', STATUS_COLORS[req.status])}>
+                        {STATUS_LABELS[req.status] || req.status}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 font-sans text-[10px] text-amber-300/80 truncate max-w-[100px]">
+                      {req.remark_base || req.notes || '-'}
+                    </td>
+                    {profile?.role === 'admin' && (
+                      <td className="py-2 px-3 text-center whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteRequest(e, req)}
+                          className="p-1 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 border border-red-500/20 transition-all active:scale-90"
+                          title="ลบใบงานนี้ (Admin)"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -332,8 +394,11 @@ export default function RequestsPage() {
           {requests.map((req: TransferRequest & any) => {
             const appNo = req.app_no || (req.items?.[0]?.name?.startsWith('TW-') ? req.items[0].name : '')
             const terminal = req.terminal_name || (req.items?.[0]?.description || req.title)
-            const staff = req.sender_staff_name || req.requester?.full_name || '-'
+            const senderStaff = req.sender_staff_name || req.requester?.full_name || '-'
+            const receiverStaff = req.receiver_staff_name || '-'
             const remark = req.remark_base || req.notes
+            const item = req.items?.[0]
+            const qtyText = item ? `${item.quantity_sent} ${item.unit || 'ชุด'}` : null
 
             return (
               <button
@@ -343,8 +408,8 @@ export default function RequestsPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0 space-y-1.5">
-                    {/* Top Row: App No & Status */}
-                    <div className="flex items-center gap-2 flex-wrap">
+                    {/* Top Row: App No, Route Pill, Status */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {appNo ? (
                         <span className="font-mono text-xs font-bold text-blue-300 bg-blue-500/20 border border-blue-500/30 px-2 py-0.5 rounded-lg">
                           {appNo}
@@ -355,12 +420,28 @@ export default function RequestsPage() {
                         </span>
                       )}
 
+                      {/* Route Direction Badge */}
+                      <span className={cn(
+                        'text-[10px] font-bold px-1.5 py-0.5 rounded-md border',
+                        req.from_location?.name?.includes('1')
+                          ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                          : 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                      )}>
+                        {req.from_location?.name} ➔ {req.to_location?.name}
+                      </span>
+
                       <span className={cn(
                         'text-[10px] font-semibold px-2 py-0.5 rounded-md border',
                         STATUS_COLORS[req.status] ?? 'text-slate-400'
                       )}>
                         {STATUS_LABELS[req.status] ?? req.status}
                       </span>
+
+                      {qtyText && (
+                        <span className="text-[10px] font-bold text-cyan-300 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-500/30">
+                          {qtyText}
+                        </span>
+                      )}
 
                       {req.type === 'loan' && (
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
@@ -380,16 +461,15 @@ export default function RequestsPage() {
                       {terminal}
                     </p>
 
-                    {/* Bottom Row: Location & Staff */}
-                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-700/50">
-                      <div className="flex items-center gap-1.5 text-[11px]">
-                        <span className="font-medium text-slate-300">{req.from_location?.name}</span>
-                        <span className="text-slate-600">→</span>
-                        <span className="font-medium text-slate-300">{req.to_location?.name}</span>
+                    {/* Bottom Row: Sender & Receiver */}
+                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1.5 border-t border-slate-700/50">
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <span className="text-slate-500">ผู้ส่ง:</span>
+                        <span className="font-semibold text-purple-300">{senderStaff}</span>
                       </div>
-                      <div className="flex items-center gap-1 text-[11px] text-slate-300">
-                        <User size={11} className="text-slate-500" />
-                        <span className="font-semibold text-purple-300">{staff}</span>
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <span className="text-slate-500">ส่งถึง:</span>
+                        <span className="font-bold text-emerald-300">{receiverStaff}</span>
                       </div>
                     </div>
                   </div>

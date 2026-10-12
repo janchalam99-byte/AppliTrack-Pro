@@ -36,17 +36,17 @@ export function formatDateInput(date: string | Date | null | undefined): string 
 }
 
 export const STATUS_LABELS: Record<string, string> = {
-  pending_confirm: 'รอยืนยันคำขอ',
-  preparing: 'กำลังเตรียมของ',
-  ready_to_send: 'พร้อมฝาก',
-  in_transit: 'ฝากแล้ว รอรับ',
-  partially_received: 'รับบางส่วน',
-  completed: 'รับครบแล้ว',
+  pending_confirm: 'รอฝากไปกับรถ',
+  preparing: 'กำลังจัดเตรียม',
+  ready_to_send: 'รอฝากไปกับรถ',
+  in_transit: 'รอปลายทางรับของ',
+  partially_received: 'รับบางส่วน (พบปัญหา)',
+  completed: 'ปิดงาน (ได้รับครบแล้ว)',
   problem_reported: 'พบปัญหา',
   returning: 'กำลังส่งคืน',
   return_in_transit: 'ฝากคืนแล้ว รอรับ',
   partially_returned: 'คืนบางส่วน',
-  return_completed: 'คืนครบแล้ว',
+  return_completed: 'คืนครบแล้ว (ปิดงาน)',
   cancelled: 'ยกเลิก',
 }
 

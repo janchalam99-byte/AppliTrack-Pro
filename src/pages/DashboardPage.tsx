@@ -106,14 +106,15 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const STATUS_TH: Record<string, string> = {
-  pending_confirm: 'รอยืนยัน',
-  preparing: 'เตรียมของ',
-  ready_to_send: 'พร้อมฝาก',
-  in_transit: 'ฝากแล้ว',
+  pending_confirm: 'รอฝากไปกับรถ',
+  preparing: 'กำลังเตรียมของ',
+  ready_to_send: 'รอฝากไปกับรถ',
+  in_transit: 'รอปลายทางรับของ',
   partially_received: 'รับบางส่วน',
+  completed: 'ปิดงานแล้ว',
   problem_reported: 'พบปัญหา',
   returning: 'ส่งคืน',
-  return_in_transit: 'ฝากคืน',
+  return_in_transit: 'ฝากคืน รอรับ',
   partially_returned: 'คืนบางส่วน',
 }
 
@@ -135,17 +136,45 @@ export default function DashboardPage() {
   })
 
   const statCards: StatCard[] = [
-    { label: 'รอยืนยันคำขอ', count: stats?.pending_confirm ?? 0, icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20', status: 'pending_confirm', urgent: (stats?.pending_confirm ?? 0) > 0 },
-    { label: 'กำลังเตรียมของ', count: stats?.preparing ?? 0, icon: Package, color: 'text-blue-400', bg: 'bg-blue-400/10 border-blue-400/20', status: 'preparing' },
-    { label: 'พร้อมฝาก', count: stats?.ready_to_send ?? 0, icon: Package, color: 'text-purple-400', bg: 'bg-purple-400/10 border-purple-400/20', status: 'ready_to_send' },
-    { label: 'รอผู้รับยืนยัน', count: stats?.in_transit ?? 0, icon: Truck, color: 'text-sky-400', bg: 'bg-sky-400/10 border-sky-400/20', status: 'in_transit', urgent: (stats?.in_transit ?? 0) > 0 },
-    { label: 'รับบางส่วน', count: stats?.partially_received ?? 0, icon: AlertTriangle, color: 'text-orange-400', bg: 'bg-orange-400/10 border-orange-400/20', status: 'partially_received' },
-    { label: 'พบปัญหา', count: stats?.problem_reported ?? 0, icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/20', status: 'problem_reported', urgent: (stats?.problem_reported ?? 0) > 0 },
-    { label: 'ยืมอยู่', count: stats?.active_loans ?? 0, icon: BookOpen, color: 'text-indigo-400', bg: 'bg-indigo-400/10 border-indigo-400/20', status: 'loan' },
-    { label: 'เกินกำหนดคืน', count: stats?.overdue_loans ?? 0, icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/20', status: 'overdue', urgent: (stats?.overdue_loans ?? 0) > 0 },
+    { 
+      label: 'รอปลายทางรับของ (ค้าง)', 
+      count: stats?.in_transit ?? 0, 
+      icon: Truck, 
+      color: 'text-sky-400', 
+      bg: 'bg-sky-400/10 border-sky-400/20', 
+      status: 'in_transit', 
+      urgent: (stats?.in_transit ?? 0) > 0 
+    },
+    { 
+      label: 'รอฝากไปกับรถ', 
+      count: (stats?.ready_to_send ?? 0) + (stats?.pending_confirm ?? 0) + (stats?.preparing ?? 0), 
+      icon: Package, 
+      color: 'text-amber-400', 
+      bg: 'bg-amber-400/10 border-amber-400/20', 
+      status: 'ready_to_send' 
+    },
+    { 
+      label: 'ยืม-คืนเครื่องมือ', 
+      count: stats?.active_loans ?? 0, 
+      icon: BookOpen, 
+      color: 'text-indigo-400', 
+      bg: 'bg-indigo-400/10 border-indigo-400/20', 
+      status: 'loan' 
+    },
+    { 
+      label: 'พบปัญหา / รับไม่ครบ', 
+      count: (stats?.problem_reported ?? 0) + (stats?.partially_received ?? 0), 
+      icon: AlertCircle, 
+      color: 'text-red-400', 
+      bg: 'bg-red-400/10 border-red-400/20', 
+      status: 'problem_reported', 
+      urgent: ((stats?.problem_reported ?? 0) + (stats?.partially_received ?? 0)) > 0 
+    },
   ]
 
-  const userLocation = locations.find(l => l.id === profile?.home_location_id)
+  const het1 = locations.find(l => l.name.includes('1') || l.name.toUpperCase().includes('HET-1'))
+  const het2 = locations.find(l => l.name.includes('2') || l.name.toUpperCase().includes('HET-2'))
+  const userLocation = locations.find(l => l.id === profile?.home_location_id) || (profile?.email?.includes('2') ? het2 : het1)
   const greeting = new Date().getHours() < 12 ? 'อรุณสวัสดิ์' : new Date().getHours() < 17 ? 'สวัสดีตอนบ่าย' : 'สวัสดีตอนเย็น'
 
   return (
@@ -154,10 +183,19 @@ export default function DashboardPage() {
       <div className="pt-2 flex items-center justify-between">
         <div>
           <p className="text-slate-400 text-sm">{greeting} 👋</p>
-          <h1 className="text-xl font-bold text-white">{profile?.full_name ?? 'ผู้ใช้'}</h1>
-          {userLocation && (
-            <p className="text-slate-500 text-xs mt-0.5">📍 {userLocation.name}</p>
-          )}
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-white">{profile?.full_name ?? 'ผู้ใช้'}</h1>
+            {userLocation && (
+              <span className={cn(
+                "text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                userLocation.name.includes('2')
+                  ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                  : "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+              )}>
+                📍 {userLocation.name}
+              </span>
+            )}
+          </div>
         </div>
         <button
           onClick={() => refetch()}
@@ -165,6 +203,37 @@ export default function DashboardPage() {
         >
           <RefreshCw size={18} />
         </button>
+      </div>
+
+      {/* 4-Step Cross-Plant Workflow Card */}
+      <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-3.5 text-xs space-y-2 backdrop-blur-md">
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-slate-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+            <span className="text-cyan-400">⚡</span>
+            <span>ระบบรับ-ส่งของข้ามโรงงาน:</span>
+          </span>
+          <span className="text-[10px] text-cyan-400 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
+            HET-1 ⇄ HET-2
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+          <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300">
+            <span className="font-bold block text-blue-400">1. สร้างรายการ</span>
+            ระบุของ, จำนวน, ส่งให้ใคร
+          </div>
+          <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300">
+            <span className="font-bold block text-cyan-400">2. ฝากขึ้นรถ</span>
+            บันทึกเวลา & ผู้กดอัตโนมัติ
+          </div>
+          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300">
+            <span className="font-bold block text-amber-400">3. รอปลายทางรับ</span>
+            ค้างในระบบจนกว่าจะกดยืนยัน
+          </div>
+          <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+            <span className="font-bold block text-emerald-400">4. ปลายทางยืนยัน</span>
+            บันทึกเวลารับจริง & ปิดงาน
+          </div>
+        </div>
       </div>
 
       {/* PWA Floating Install Banner */}
@@ -290,14 +359,18 @@ export default function DashboardPage() {
                         {terminal}
                       </p>
                       <div className="flex items-center justify-between text-xs text-slate-400 mt-1">
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-[11px] text-slate-300 font-semibold">
                           {req.from_location?.name} → {req.to_location?.name}
                         </p>
-                        {staff && (
+                        {req.receiver_staff_name ? (
+                          <p className="text-[10px] text-emerald-300 font-medium">
+                            ส่งถึง: {req.receiver_staff_name}
+                          </p>
+                        ) : staff ? (
                           <p className="text-[10px] font-semibold text-purple-300">
                             {staff}
                           </p>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">

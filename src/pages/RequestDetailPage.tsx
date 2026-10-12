@@ -605,8 +605,18 @@ export default function RequestDetailPage() {
   const totalReturned = items.reduce((s: number, i: any) => s + i.quantity_returned, 0)
   const canCancel = !['completed', 'return_completed', 'cancelled'].includes(request.status)
 
-  // Determine available actions based on status
-  const actions = getAvailableActions(request.status, request.type)
+  const het1Id = 'e4efcba9-d25e-44c4-9d92-8089195bceb4'
+  const het2Id = '1979ede3-5a7f-4b65-8ccf-de428093458d'
+
+  // Determine current user's plant (HET-1 vs HET-2)
+  // Strict rule: HET-1 sends -> HET-2 must receive; HET-2 sends -> HET-1 must receive
+  const userLocationId = profile?.home_location_id || (profile?.email === '2@a.com' ? het2Id : het1Id)
+  const isSender = (request.from_location_id === userLocationId)
+  const isReceiver = (request.to_location_id === userLocationId)
+  const isAdmin = profile?.role === 'admin'
+
+  // Determine available actions based on status and plant role (HET-1 sends -> HET-2 receives)
+  const actions = getAvailableActions(request.status, request.type, isSender, isReceiver, isAdmin, request.to_location?.name)
 
   return (
     <div className="p-4 space-y-4">
@@ -892,37 +902,27 @@ export default function RequestDetailPage() {
           </div>
         </div>
 
-        <div className="mt-3 pt-3 border-t border-slate-700 grid grid-cols-2 gap-3 text-xs">
+        <div className="mt-3 pt-3 border-t border-slate-700/80 grid grid-cols-2 gap-3 text-xs">
           <div>
-            <p className="text-slate-500 flex items-center gap-1"><User size={10} /> ชื่อผู้รับ-ส่ง</p>
+            <p className="text-slate-400 flex items-center gap-1"><User size={11} className="text-purple-400" /> ผู้ส่งของ ({request.from_location?.name})</p>
             <p className="text-purple-300 font-bold mt-0.5">{request.sender_staff_name || request.requester?.full_name || '-'}</p>
           </div>
           <div>
-            <p className="text-slate-500 flex items-center gap-1">ฐาน App</p>
-            <p className="text-amber-300 font-medium mt-0.5">{request.remark_base || 'ไม่ได้ระบุ'}</p>
+            <p className="text-slate-400 flex items-center gap-1"><User size={11} className="text-emerald-400" /> ส่งให้ใคร ({request.to_location?.name})</p>
+            <p className="text-emerald-300 font-bold mt-0.5">{request.receiver_staff_name || '-'}</p>
           </div>
-          {request.deposited_at ? (
-            <div>
-              <p className="text-slate-500">เวลาส่ง (Deposit)</p>
-              <p className="text-slate-300 font-medium mt-0.5">{formatDateTime(request.deposited_at)}</p>
-            </div>
-          ) : (
-            <div>
-              <p className="text-slate-500">เวลาส่ง (Deposit)</p>
-              <p className="text-slate-500 mt-0.5">ยังไม่ได้ส่ง</p>
-            </div>
-          )}
-          {request.received_at ? (
-            <div>
-              <p className="text-slate-500">เวลารับ (Received)</p>
-              <p className="text-emerald-400 font-medium mt-0.5">{formatDateTime(request.received_at)}</p>
-            </div>
-          ) : (
-            <div>
-              <p className="text-slate-500">เวลารับ (Received)</p>
-              <p className="text-slate-500 mt-0.5">รอปลายทางรับ</p>
-            </div>
-          )}
+          <div>
+            <p className="text-slate-400">เวลาฝากขึ้นรถ</p>
+            <p className="text-slate-200 font-semibold mt-0.5">
+              {request.deposited_at ? formatDateTime(request.deposited_at) : 'ยังไม่ได้ฝากขึ้นรถ'}
+            </p>
+          </div>
+          <div>
+            <p className="text-slate-400">เวลารับจริง (ปิดงาน)</p>
+            <p className="text-emerald-400 font-semibold mt-0.5">
+              {request.received_at ? formatDateTime(request.received_at) : 'รอปลายทางรับของ'}
+            </p>
+          </div>
         </div>
         {request.notes && (
           <div className="mt-3 pt-3 border-t border-slate-700">
@@ -1033,31 +1033,93 @@ export default function RequestDetailPage() {
       )}
 
       {/* Action Buttons */}
+      {/* Action Buttons */}
       {actions.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">การดำเนินการ</h2>
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">การดำเนินการถัดไป</h2>
           <div className="space-y-2">
             {actions.map(action => (
               <button
                 key={action.id}
                 onClick={() => setShowAction(showAction === action.id ? null : action.id)}
                 className={cn(
-                  'w-full font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 touch-feedback text-sm',
-                  action.variant === 'primary' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20' :
-                  action.variant === 'success' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-500/20' :
+                  'w-full font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 touch-feedback text-sm shadow-lg',
+                  action.variant === 'primary' ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white shadow-blue-500/25' :
+                  action.variant === 'success' ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 text-white shadow-emerald-500/25' :
                   action.variant === 'warning' ? 'bg-orange-500/20 border border-orange-500/30 text-orange-400' :
                   action.variant === 'danger' ? 'bg-red-500/20 border border-red-500/30 text-red-400' :
                   'bg-slate-700 text-slate-300 border border-slate-600'
                 )}
               >
                 <action.icon size={18} />
-                {action.label}
+                <span>{action.label}</span>
                 {showAction === action.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
             ))}
           </div>
         </div>
       )}
+
+      {/* Role-Based Guidance Banners */}
+      <div className="space-y-3">
+        {/* Case A: In Transit - Guidance for Receiver Plant */}
+        {(isReceiver || isAdmin) && request.status === 'in_transit' && (
+          <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-4 text-xs space-y-2 backdrop-blur-md">
+            <div className="flex items-center gap-2 font-bold text-emerald-300 text-sm">
+              <Package size={18} className="text-emerald-400" />
+              <span>📦 ของส่งมาจาก {request.from_location?.name} ถึงคุณแล้ว ({request.to_location?.name})</span>
+            </div>
+            <p className="text-slate-300 text-xs leading-relaxed">
+              ผู้ส่ง: <strong className="text-cyan-300">{request.sender_staff_name}</strong> · ส่งถึง: <strong className="text-emerald-300">{request.receiver_staff_name || 'คุณ'}</strong> · ฝากของขึ้นรถเมื่อ <strong className="text-white">{formatDateTime(request.deposited_at)}</strong>
+            </p>
+            <p className="text-[11px] text-emerald-300/90 font-semibold bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-500/20">
+              👉 ตรวจสอบสิ่งของและจำนวนที่ได้รับ จากนั้นแตะปุ่ม <strong>"✅ {request.to_location?.name} กดยืนยันรับของ (ปิดงาน)"</strong> ด้านล่าง
+            </p>
+          </div>
+        )}
+
+        {/* Case B: In Transit - Status for Sender Plant */}
+        {isSender && !isAdmin && request.status === 'in_transit' && (
+          <div className="bg-amber-500/15 border border-amber-500/30 rounded-2xl p-4 text-xs space-y-2 backdrop-blur-md">
+            <div className="flex items-center gap-2 font-bold text-amber-300 text-sm">
+              <Truck size={18} className="text-amber-400" />
+              <span>🚚 อยู่ระหว่างจัดส่งไป {request.to_location?.name} · รอทาง {request.to_location?.name} รับของ</span>
+            </div>
+            <p className="text-slate-300 text-xs leading-relaxed">
+              ฝากของไปกับรถแล้วเมื่อ <strong className="text-white">{formatDateTime(request.deposited_at)}</strong> โดย <strong className="text-cyan-300">{request.sender_staff_name || request.requester?.full_name}</strong> · ส่งถึง <strong className="text-emerald-300">{request.receiver_staff_name || 'ปลายทาง'}</strong>
+            </p>
+            <p className="text-[11px] text-amber-400 font-semibold bg-amber-950/40 p-2.5 rounded-xl border border-amber-500/20">
+              🔒 <strong>คุณเป็นฝ่ายส่ง ({request.from_location?.name}):</strong> รายการจะค้างอยู่ในระบบจนกว่าผู้รับฝั่ง <strong>{request.to_location?.name}</strong> จะเป็นคนกดยืนยันรับของจริงเพื่อปิดงาน
+            </p>
+          </div>
+        )}
+
+        {/* Case C: Ready to send - Guidance for Receiver Plant */}
+        {['ready_to_send', 'pending_confirm', 'preparing'].includes(request.status) && isReceiver && !isAdmin && (
+          <div className="bg-blue-500/15 border border-blue-500/30 rounded-2xl p-4 text-xs space-y-2 backdrop-blur-md">
+            <div className="flex items-center gap-2 font-bold text-blue-300 text-sm">
+              <Clock size={18} className="text-blue-400" />
+              <span>⏳ รอต้นทาง ({request.from_location?.name}) ฝากของขึ้นรถ</span>
+            </div>
+            <p className="text-slate-300 text-xs leading-relaxed">
+              รายการนี้ถูกสร้างโดย {request.from_location?.name} เพื่อส่งให้ {request.receiver_staff_name || 'คุณ'} ({request.to_location?.name}) ขณะนี้กำลังรอให้คนส่งกด "ฝากของไปกับรถแล้ว"
+            </p>
+          </div>
+        )}
+
+        {/* Case D: Completed */}
+        {request.status === 'completed' && (
+          <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-4 text-xs space-y-1.5 backdrop-blur-md">
+            <div className="flex items-center gap-2 font-bold text-emerald-300 text-sm">
+              <CheckCircle size={18} className="text-emerald-400" />
+              <span>🎉 ปิดงานเรียบร้อย (ได้รับของครบแล้ว)</span>
+            </div>
+            <p className="text-slate-300 text-xs">
+              {request.to_location?.name} ยืนยันรับของเรียบร้อยเมื่อ {formatDateTime(request.received_at)} โดย {request.receiver_staff_name || 'ผู้รับ'}
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Action Panels */}
       {showAction === 'confirm' && (
@@ -1081,65 +1143,81 @@ export default function RequestDetailPage() {
 
       {showAction === 'deposit' && (
         <ActionPanel
-          title="ฝากของไปกับรถแล้ว"
+          title={`🚚 ยืนยันฝากของไปกับรถแล้ว (ส่งให้ ${request.to_location?.name})`}
           onConfirm={handleDeposit}
-          confirmLabel="บันทึกการฝากของ"
+          confirmLabel="บันทึกการฝากของ (บันทึกเวลาปัจจุบัน)"
           confirmVariant="primary"
           isLoading={isDepositing}
         >
+          <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/30 text-xs text-blue-200 space-y-1">
+            <p className="font-bold text-white">⚡ ระบบจะบันทึกวันและเวลาปัจจุบันอัตโนมัติ</p>
+            <p className="text-slate-300">
+              ผู้บันทึก: <strong className="text-white">{profile?.full_name}</strong> · สถานะจะเปลี่ยนเป็น "รอ {request.to_location?.name} รับของ"
+            </p>
+          </div>
           <PhotoUploader
             stage="deposit"
             requestId={request.id}
             photos={actionPhotos}
             onPhotosChange={setActionPhotos}
-            label="ถ่ายรูปตอนฝากของ (แนะนำ)"
+            label="ถ่ายรูปตอนฝากของขึ้นรถ (ไม่บังคับ)"
             maxPhotos={5}
           />
           <textarea
             value={actionNotes}
             onChange={e => setActionNotes(e.target.value)}
-            placeholder="หมายเหตุ..."
+            placeholder="หมายเหตุการฝากของ (ถ้ามี)..."
             rows={2}
-            className="input-field resize-none mt-3"
+            className="input-field resize-none mt-2 text-xs"
           />
         </ActionPanel>
       )}
 
       {showAction === 'receive' && (
         <ActionPanel
-          title="ยืนยันรับของ"
+          title={`✅ ${request.to_location?.name || 'ผู้รับ'} กดยืนยันรับของ (ปิดงาน)`}
           onConfirm={() => handleConfirmReceipt(false)}
-          confirmLabel="รับครบ ✓"
+          confirmLabel="ได้รับของครบแล้ว (ปิดงาน) ✓"
           confirmVariant="success"
-          secondaryLabel="แจ้งปัญหา"
+          secondaryLabel="แจ้งปัญหา / รับไม่ครบ"
           onSecondary={() => handleConfirmReceipt(true)}
         >
+          <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-200 space-y-1">
+            <p className="font-bold text-white">⚡ ระบบจะบันทึกวันเวลาที่รับจริงอัตโนมัติ</p>
+            <p className="text-slate-300">
+              ผู้รับ: <strong className="text-white">{profile?.full_name}</strong> · รายการนี้จะปิดงานสมบูรณ์
+            </p>
+          </div>
           <PhotoUploader
             stage="receipt"
             requestId={request.id}
             photos={actionPhotos}
             onPhotosChange={setActionPhotos}
-            label="ถ่ายรูปตอนรับของ"
+            label="ถ่ายรูปตอนรับของ (ไม่บังคับ)"
             maxPhotos={5}
           />
-          <div className="mt-3">
-            <p className="text-xs font-medium text-slate-400 mb-2">ยืนยันจำนวนที่ได้รับ</p>
-            <div className="space-y-2">
+          <div className="mt-2">
+            <p className="text-xs font-semibold text-slate-300 mb-1.5">จำนวนที่ส่งมา:</p>
+            <div className="space-y-1.5">
               {items.map((item: any) => (
-                <div key={item.id} className="flex items-center gap-3 bg-slate-900/50 rounded-xl p-3">
-                  <div className="flex-1">
-                    <p className="text-sm text-white">{item.name}</p>
-                    <p className="text-xs text-slate-500">ส่งมา {formatQuantity(item.quantity_sent)} {item.unit}</p>
+                <div key={item.id} className="flex items-center justify-between bg-slate-900/60 rounded-xl p-2.5 border border-slate-700/60 text-xs">
+                  <div>
+                    <p className="text-white font-bold">{item.name}</p>
+                    <p className="text-slate-400">ส่งมา {formatQuantity(item.quantity_sent)} {item.unit}</p>
                   </div>
-                  <input
-                    type="number"
-                    min="0"
-                    max={item.quantity_sent}
-                    step="0.01"
-                    defaultValue={item.quantity_sent}
-                    onChange={e => setReceiptQtys(prev => ({ ...prev, [item.id]: Number(e.target.value) }))}
-                    className="w-20 input-field text-center"
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400 text-[11px]">รับได้:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={item.quantity_sent}
+                      step="any"
+                      defaultValue={item.quantity_sent}
+                      onChange={e => setReceiptQtys(prev => ({ ...prev, [item.id]: Number(e.target.value) }))}
+                      className="w-16 input-field py-1 text-center font-bold text-emerald-400 text-xs"
+                    />
+                    <span className="text-slate-400 text-[11px]">{item.unit}</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1147,13 +1225,13 @@ export default function RequestDetailPage() {
           <textarea
             value={actionNotes}
             onChange={e => setActionNotes(e.target.value)}
-            placeholder="หมายเหตุหรือรายละเอียดปัญหา..."
+            placeholder="หมายเหตุการรับของ (ถ้ามี)..."
             rows={2}
-            className="input-field resize-none mt-3"
+            className="input-field resize-none mt-2 text-xs"
           />
-          <div className="mt-3">
-            <p className="text-xs font-medium text-slate-400 mb-2">ประเภทปัญหา (กรณีแจ้งปัญหา)</p>
-            <select value={problemType} onChange={e => setProblemType(e.target.value)} className="input-field">
+          <div className="mt-2">
+            <p className="text-xs font-medium text-slate-400 mb-1">ประเภทปัญหา (กรณีแตะแจ้งปัญหา)</p>
+            <select value={problemType} onChange={e => setProblemType(e.target.value)} className="input-field text-xs">
               <option value="incomplete">รับไม่ครบ</option>
               <option value="wrong_item">ของผิด</option>
               <option value="damaged">ของเสียหาย</option>
@@ -1339,32 +1417,39 @@ interface ActionDef {
   variant: 'primary' | 'success' | 'warning' | 'danger' | 'default'
 }
 
-function getAvailableActions(status: string, type: string): ActionDef[] {
+function getAvailableActions(
+  status: string,
+  type: string,
+  isSender: boolean,
+  isReceiver: boolean,
+  isAdmin: boolean,
+  toLocationName?: string
+): ActionDef[] {
   const actions: ActionDef[] = []
-  switch (status) {
-    case 'pending_confirm':
-      actions.push({ id: 'confirm', label: 'ยืนยันคำขอ', icon: CheckCircle, variant: 'primary' })
-      break
-    case 'preparing':
-      actions.push({ id: 'ready', label: 'เตรียมของเสร็จแล้ว', icon: Package, variant: 'primary' })
-      break
-    case 'ready_to_send':
-      actions.push({ id: 'deposit', label: 'ฝากของไปกับรถแล้ว', icon: Truck, variant: 'primary' })
-      break
-    case 'in_transit':
-    case 'partially_received':
-      actions.push({ id: 'receive', label: 'ยืนยันรับของ / แจ้งปัญหา', icon: CheckCircle, variant: 'success' })
-      break
-    case 'completed':
-      if (type === 'loan') {
-        actions.push({ id: 'return_deposit', label: 'เริ่มส่งคืน', icon: RotateCcw, variant: 'primary' })
-      }
-      break
-    case 'returning':
-    case 'return_in_transit':
-    case 'partially_returned':
+
+  // Step 2: ฝากของไปกับรถแล้ว (ผู้ส่งต้นทาง หรือ Admin เป็นคนกด)
+  if (['ready_to_send', 'pending_confirm', 'preparing'].includes(status)) {
+    if (isSender || isAdmin) {
+      actions.push({ id: 'deposit', label: '🚚 กด “ฝากของไปกับรถแล้ว”', icon: Truck, variant: 'primary' })
+    }
+  } 
+  // Step 4: ผู้รับกดยืนยัน (ผู้รับปลายทาง หรือ Admin เป็นคนกด)
+  else if (['in_transit', 'partially_received'].includes(status)) {
+    if (isReceiver || isAdmin) {
+      const targetLabel = toLocationName ? `${toLocationName} กดยืนยันรับของ` : 'ผู้รับกดยืนยันรับของ'
+      actions.push({ id: 'receive', label: `✅ ${targetLabel} (ปิดงาน)`, icon: CheckCircle, variant: 'success' })
+    }
+  } 
+  // Loan Return Flow (if loan)
+  else if (status === 'completed') {
+    if (type === 'loan' && (isReceiver || isAdmin)) {
+      actions.push({ id: 'return_deposit', label: 'เริ่มส่งคืนเครื่องมือ', icon: RotateCcw, variant: 'primary' })
+    }
+  } 
+  else if (['returning', 'return_in_transit', 'partially_returned'].includes(status)) {
+    if (isSender || isAdmin) {
       actions.push({ id: 'confirm_return', label: 'ยืนยันรับคืน', icon: CheckCircle, variant: 'success' })
-      break
+    }
   }
   return actions
 }
