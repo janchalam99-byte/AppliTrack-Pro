@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, Lock, Mail, Package, AlertTriangle, ExternalLink } from 'lucide-react'
+import { 
+  Eye, EyeOff, Lock, AlertTriangle, ExternalLink, 
+  Zap, Factory, Layers, ArrowRight, Sparkles, ShieldCheck 
+} from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -18,7 +21,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [showGuide, setShowGuide] = useState(!isConfigured)
-  const [selectedAccount, setSelectedAccount] = useState<'1' | '2' | 'admin' | null>('1')
+  const [selectedAccount, setSelectedAccount] = useState<'1' | '2' | null>('1')
   const [isSupabasePaused, setIsSupabasePaused] = useState(false)
 
   const { register, handleSubmit, setValue, setFocus, formState: { errors } } = useForm<FormData>({
@@ -82,13 +85,9 @@ export default function LoginPage() {
     await performLogin(data.email, data.password)
   }
 
-  const handleSelectAccount = (accountType: '1' | '2' | 'admin') => {
+  const handleSelectAccount = (accountType: '1' | '2') => {
     setSelectedAccount(accountType)
-    if (accountType === 'admin') {
-      setValue('email', 'admin@a.com')
-    } else {
-      setValue('email', `${accountType}@a.com`)
-    }
+    setValue('email', `${accountType}@a.com`)
     setValue('password', '')
     // Focus password field immediately
     setTimeout(() => {
@@ -96,151 +95,216 @@ export default function LoginPage() {
     }, 50)
   }
 
+  const handleQuickFillPassword = () => {
+    const quickPass = selectedAccount === '2' ? '222222' : '111111'
+    setValue('password', quickPass)
+    toast.success(`กรอกรหัสผ่าน ${quickPass} เรียบร้อย`, { id: 'quick-pass', duration: 1500 })
+    setTimeout(() => {
+      setFocus('password')
+    }, 50)
+  }
+
   return (
-    <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center px-4 py-8 relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl" />
-      </div>
+    <div className="min-h-screen bg-[#090d16] bg-tech-grid flex flex-col items-center justify-center px-4 py-8 sm:py-12 relative overflow-hidden font-sans">
+      {/* Dynamic Ambient Background Glows */}
+      <div className="absolute top-1/4 -left-32 w-80 sm:w-96 h-80 sm:h-96 bg-cyan-600/15 rounded-full blur-[100px] pointer-events-none animate-ambient-glow" />
+      <div className="absolute bottom-1/4 -right-32 w-80 sm:w-96 h-80 sm:h-96 bg-indigo-600/15 rounded-full blur-[100px] pointer-events-none animate-ambient-glow" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[450px] sm:w-[600px] h-[450px] sm:h-[600px] bg-blue-600/10 rounded-full blur-[130px] pointer-events-none" />
 
       <div className="w-full max-w-sm relative z-10">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 shadow-2xl shadow-blue-500/30 mb-4">
-            <span className="text-3xl select-none">⚡</span>
+        {/* Sleek Hero Branding Section */}
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="relative inline-flex items-center justify-center mb-3 group">
+            <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 blur-xl opacity-60 group-hover:opacity-90 animate-ambient-glow transition-opacity" />
+            <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-slate-900/90 to-slate-950/90 p-[1px] border border-white/20 shadow-2xl backdrop-blur-xl flex items-center justify-center">
+              <div className="w-full h-full rounded-[22px] bg-gradient-to-br from-blue-500/20 via-indigo-500/10 to-violet-500/20 flex items-center justify-center">
+                <Zap size={36} className="text-cyan-400 drop-shadow-[0_0_12px_rgba(34,211,238,0.8)] animate-float-slow" />
+              </div>
+            </div>
           </div>
-          <h1 className="text-2xl font-black text-white mb-1 tracking-tight font-sans">
-            AppliTrack <span className="text-blue-400">PRO</span>
+
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center justify-center gap-2">
+            <span className="text-shimmer">AppliTrack</span>
+            <span className="px-2 py-0.5 text-[11px] font-black rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/30 uppercase tracking-wider">
+              PRO
+            </span>
           </h1>
-          <p className="text-slate-400 text-xs">ระบบติดตามรับ-ส่ง & ยืม-คืนเครื่องมือข้ามโรงงาน</p>
+          <p className="text-slate-400 text-xs mt-1.5 font-medium">
+            ระบบติดตามรับ-ส่ง & ยืม-คืนเครื่องมือข้ามโรงงาน
+          </p>
+
+          {/* Operational Status Badge */}
+          <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/70 border border-slate-800 text-[11px] text-slate-300 backdrop-blur-md shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-semibold text-emerald-400">ระบบออนไลน์</span>
+            <span className="text-slate-600">·</span>
+            <span className="text-slate-400">พร้อมใช้งาน 24 ชม.</span>
+          </div>
         </div>
 
-        {/* Form Card */}
-        <div className="bg-[#1e293b] rounded-3xl p-6 border border-slate-700 shadow-2xl">
-          <h2 className="text-lg font-bold text-white mb-5">เข้าสู่ระบบ</h2>
+        {/* Form Card Shell with Premium Glassmorphism */}
+        <div className="relative rounded-3xl bg-slate-900/75 backdrop-blur-2xl p-6 sm:p-7 border border-white/10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] overflow-hidden">
+          {/* Subtle top edge neon reflection */}
+          <div className="absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent" />
+
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <ShieldCheck size={18} className="text-cyan-400" />
+              <span>เข้าสู่ระบบ</span>
+            </h2>
+            <span className="text-[11px] text-slate-400 font-medium">เลือกโรงงานประจำการ</span>
+          </div>
           
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Factory & Admin Selector */}
+            {/* Factory Selector */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-2">
-                เลือกหน่วยงาน / บทบาทผู้ใช้งาน
+                โรงงานต้นทาง / สถานที่ประจำ
               </label>
               <div className="grid grid-cols-2 gap-2.5">
+                {/* HET-1 Card */}
                 <button
                   type="button"
                   onClick={() => handleSelectAccount('1')}
-                  className={`p-3 rounded-2xl border text-left transition-all active:scale-[0.98] ${
+                  className={`group relative p-3.5 rounded-2xl border text-left transition-all duration-200 active:scale-[0.97] overflow-hidden ${
                     selectedAccount === '1'
-                      ? 'bg-blue-600/20 border-blue-500 text-white shadow-lg shadow-blue-500/10'
-                      : 'bg-slate-900/60 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+                      ? 'bg-gradient-to-br from-cyan-950/60 via-blue-900/40 to-slate-900/90 border-cyan-400/80 shadow-[0_0_20px_rgba(6,182,212,0.25)] text-white'
+                      : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700 hover:bg-slate-900/60'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold uppercase tracking-wider text-white">HET-1</span>
-                    {selectedAccount === '1' && (
-                      <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                  {selectedAccount === '1' && (
+                    <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-cyan-400 to-blue-500" />
+                  )}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                      selectedAccount === '1'
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                        : 'bg-slate-800/80 text-slate-400 border border-slate-700/60 group-hover:text-slate-300'
+                    }`}>
+                      <Factory size={16} />
+                    </div>
+                    {selectedAccount === '1' ? (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-cyan-300 bg-cyan-950/80 px-1.5 py-0.5 rounded-full border border-cyan-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                        เลือกอยู่
+                      </span>
+                    ) : (
+                      <span className="w-2 h-2 rounded-full bg-slate-700" />
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-400">โรงงาน 1 (Plant 1)</p>
+                  <div className="text-sm font-extrabold uppercase tracking-wide text-white">HET-1</div>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">โรงงาน 1 (Plant 1)</p>
                 </button>
+
+                {/* HET-2 Card */}
                 <button
                   type="button"
                   onClick={() => handleSelectAccount('2')}
-                  className={`p-3 rounded-2xl border text-left transition-all active:scale-[0.98] ${
+                  className={`group relative p-3.5 rounded-2xl border text-left transition-all duration-200 active:scale-[0.97] overflow-hidden ${
                     selectedAccount === '2'
-                      ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10'
-                      : 'bg-slate-900/60 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+                      ? 'bg-gradient-to-br from-indigo-950/60 via-purple-900/40 to-slate-900/90 border-indigo-400/80 shadow-[0_0_20px_rgba(99,102,241,0.25)] text-white'
+                      : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700 hover:bg-slate-900/60'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold uppercase tracking-wider text-white">HET-2</span>
-                    {selectedAccount === '2' && (
-                      <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                  {selectedAccount === '2' && (
+                    <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-indigo-400 to-purple-500" />
+                  )}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                      selectedAccount === '2'
+                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                        : 'bg-slate-800/80 text-slate-400 border border-slate-700/60 group-hover:text-slate-300'
+                    }`}>
+                      <Layers size={16} />
+                    </div>
+                    {selectedAccount === '2' ? (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-indigo-300 bg-indigo-950/80 px-1.5 py-0.5 rounded-full border border-indigo-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                        เลือกอยู่
+                      </span>
+                    ) : (
+                      <span className="w-2 h-2 rounded-full bg-slate-700" />
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-400">โรงงาน 2 (Plant 2)</p>
+                  <div className="text-sm font-extrabold uppercase tracking-wide text-white">HET-2</div>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">โรงงาน 2 (Plant 2)</p>
                 </button>
               </div>
-
-              {/* Admin Button */}
-              <button
-                type="button"
-                onClick={() => handleSelectAccount('admin')}
-                className={`w-full mt-2.5 p-3 rounded-2xl border text-left transition-all active:scale-[0.98] flex items-center justify-between ${
-                  selectedAccount === 'admin'
-                    ? 'bg-amber-500/20 border-amber-500 text-white shadow-lg shadow-amber-500/10'
-                    : 'bg-slate-900/50 border-slate-700/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="text-base select-none">👑</span>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-white">ผู้ดูแลระบบ</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Admin</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400">แก้ไข/ลบประวัติ และจัดการทุกโรงงาน</p>
-                  </div>
-                </div>
-                {selectedAccount === 'admin' && (
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                )}
-              </button>
             </div>
 
             {/* Email (Auto-filled by selecting factory) */}
             <input type="hidden" {...register('email')} />
 
-            {/* Password */}
+            {/* Password Section */}
             <div className="pt-1">
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                รหัสผ่าน
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-300">
+                  รหัสผ่าน
+                </label>
+                {/* One-click quick fill pill */}
+                <button
+                  type="button"
+                  onClick={handleQuickFillPassword}
+                  className="text-[11px] text-cyan-300 hover:text-cyan-200 transition-colors flex items-center gap-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-2 py-0.5 rounded-lg active:scale-95"
+                  title="คลิกเพื่อใส่รหัสผ่านด่วน"
+                >
+                  <Sparkles size={11} className="text-cyan-400" />
+                  <span>ใส่รหัสด่วน ({selectedAccount === '2' ? '222222' : '111111'})</span>
+                </button>
+              </div>
+
               <div className="relative">
-                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 transition-colors pointer-events-none" />
                 <input
                   {...register('password')}
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   placeholder="กรุณากรอกรหัสผ่าน"
-                  className="w-full bg-[#0f172a] border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-3 pl-10 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full bg-slate-950/70 border border-slate-700/80 text-white placeholder-slate-500 rounded-xl px-4 py-3 pl-10 pr-10 text-sm focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-inner"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-0.5 rounded"
+                  aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
               {errors.password && (
-                <p className="text-red-400 text-xs mt-1.5">{errors.password.message}</p>
+                <p className="text-red-400 text-xs mt-1.5 font-medium">{errors.password.message}</p>
               )}
             </div>
 
-            {/* Submit */}
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-all duration-200 active:scale-95 mt-2"
+              className="group relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 p-[1px] font-bold text-white shadow-xl shadow-blue-600/25 transition-all duration-300 hover:shadow-blue-500/40 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed mt-2"
             >
-              {isLoading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  กำลังเข้าสู่ระบบ...
-                </span>
-              ) : 'เข้าสู่ระบบ'}
+              <div className="relative flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 py-3.5 px-6 transition-all duration-300 group-hover:brightness-110">
+                {isLoading ? (
+                  <span className="flex items-center justify-center gap-2 text-sm font-semibold">
+                    <svg className="animate-spin w-4 h-4 text-white" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    กำลังเข้าสู่ระบบ...
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-sm font-bold tracking-wide">เข้าสู่ระบบ</span>
+                    <ArrowRight size={17} className="transition-transform duration-300 group-hover:translate-x-1" />
+                  </>
+                )}
+              </div>
             </button>
           </form>
         </div>
 
         {/* Supabase Paused Notice with Direct 1-Click Restore Link */}
         {isSupabasePaused && (
-          <div className="mt-4 bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 text-xs text-amber-200 shadow-xl space-y-2.5">
+          <div className="mt-4 bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 text-xs text-amber-200 shadow-xl space-y-2.5 backdrop-blur-md">
             <div className="flex items-center gap-2 font-bold text-amber-300 text-sm">
               <AlertTriangle size={18} className="text-amber-400 flex-shrink-0" />
               <span>ฐานข้อมูล Supabase อาจกำลังพักชั่วคราว (Paused)</span>
@@ -262,7 +326,7 @@ export default function LoginPage() {
 
         {/* Supabase Setup Notice when not configured */}
         {!isConfigured && (
-          <div className="mt-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-xs text-amber-200">
+          <div className="mt-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-xs text-amber-200 backdrop-blur-md">
             <div className="flex items-center justify-between mb-2">
               <span className="font-bold flex items-center gap-1.5 text-amber-400">
                 ⚠️ ยังไม่ได้เชื่อมต่อ Supabase
@@ -286,8 +350,8 @@ export default function LoginPage() {
           </div>
         )}
 
-        <p className="text-center text-slate-600 text-xs mt-6">
-          ระบบนี้สำหรับผู้ใช้ที่ได้รับอนุญาตเท่านั้น
+        <p className="text-center text-slate-500 text-xs mt-6 font-medium">
+          AppliTrack PRO · ระบบจัดการรับ-ส่งและยืม-คืนเครื่องมือ
         </p>
       </div>
     </div>
