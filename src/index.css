@@ -99,8 +99,9 @@ body {
 
 /* Prevent auto zoom on iOS inputs */
 @media screen and (max-width: 768px) {
-  input, select, textarea {
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea {
     font-size: 16px !important;
+    line-height: 1.35;
   }
 }
 

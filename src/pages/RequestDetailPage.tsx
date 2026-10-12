@@ -1473,15 +1473,15 @@ function ActionPanel({
     <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 space-y-4">
       <h3 className="text-sm font-bold text-white">{title}</h3>
       {children}
-      <div className="flex gap-2 pt-2">
+      <div className="flex flex-col sm:flex-row gap-2 pt-2">
         <button
           onClick={onConfirm}
           disabled={isLoading}
           className={cn(
-            'flex-1 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50',
+            'w-full sm:flex-1 py-3.5 sm:py-3 px-4 rounded-2xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 text-center',
             confirmVariant === 'success'
-              ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white'
-              : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
+              ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-600/20'
+              : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/20'
           )}
         >
           {isLoading ? 'กำลังบันทึก...' : confirmLabel}
@@ -1489,7 +1489,7 @@ function ActionPanel({
         {secondaryLabel && onSecondary && (
           <button
             onClick={onSecondary}
-            className="flex-1 py-3 rounded-2xl font-bold text-sm bg-orange-500/20 border border-orange-500/30 text-orange-400 transition-all active:scale-95"
+            className="w-full sm:flex-1 py-3 sm:py-3 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-orange-500/20 border border-orange-500/30 text-orange-400 hover:bg-orange-500/30 transition-all active:scale-95 text-center"
           >
             {secondaryLabel}
           </button>

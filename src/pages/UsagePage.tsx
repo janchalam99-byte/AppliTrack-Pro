@@ -48,8 +48,8 @@ export default function UsagePage() {
       // 2. นับจำนวนรายการในแต่ละตาราง
       const [reqRes, itemRes, loanRes, histRes] = await Promise.all([
         supabase.from('transfer_requests').select('id', { count: 'exact', head: true }),
-        supabase.from('request_items').select('id', { count: 'exact', head: true }),
-        supabase.from('loan_records').select('id', { count: 'exact', head: true }),
+        supabase.from('transfer_request_items').select('id', { count: 'exact', head: true }),
+        supabase.from('transfer_requests').select('id', { count: 'exact', head: true }).eq('type', 'loan'),
         supabase.from('status_history').select('id', { count: 'exact', head: true }),
       ])
 
@@ -188,17 +188,17 @@ export default function UsagePage() {
     try {
       setIsExporting('items')
       const { data, error } = await supabase
-        .from('request_items')
+        .from('transfer_request_items')
         .select(`
-          item_name,
-          part_number,
-          quantity_requested,
+          name,
+          description,
+          quantity_sent,
           quantity_received,
           quantity_returned,
           unit,
           notes,
           created_at,
-          request:transfer_requests!request_items_request_id_fkey(request_no, title)
+          request:transfer_requests!transfer_request_items_request_id_fkey(request_number, title, app_no, terminal_name)
         `)
         .order('created_at', { ascending: false })
 
@@ -210,10 +210,11 @@ export default function UsagePage() {
 
       const headers = [
         'เลขที่เอกสาร',
-        'หัวข้องาน',
+        'App No.',
+        'Terminal Name / รายการ',
         'ชื่อสิ่งของ/อุปกรณ์',
-        'รหัสอะไหล่ (Part No.)',
-        'จำนวนที่ขอ',
+        'รายละเอียด',
+        'จำนวนที่ส่ง',
         'จำนวนที่รับแล้ว',
         'จำนวนที่คืนแล้ว',
         'หน่วยนับ',
@@ -221,14 +222,15 @@ export default function UsagePage() {
       ]
 
       const rows = data.map((i: any) => [
-        i.request?.request_no || '',
-        i.request?.title || '',
-        i.item_name,
-        i.part_number || '-',
-        i.quantity_requested,
+        i.request?.request_number || '',
+        i.request?.app_no || '-',
+        i.request?.terminal_name || i.request?.title || '',
+        i.name,
+        i.description || '-',
+        i.quantity_sent,
         i.quantity_received || 0,
         i.quantity_returned || 0,
-        i.unit || 'ชิ้น',
+        i.unit || 'ชุด',
         i.notes || '',
       ])
 
@@ -247,17 +249,22 @@ export default function UsagePage() {
     try {
       setIsExporting('loans')
       const { data, error } = await supabase
-        .from('loan_records')
+        .from('transfer_requests')
         .select(`
+          request_number,
+          app_no,
+          terminal_name,
+          title,
           status,
-          borrowed_at,
-          due_date,
-          borrower_name,
-          borrower_phone,
-          item:request_items!loan_records_item_id_fkey(item_name, part_number, unit),
-          request:transfer_requests!loan_records_request_id_fkey(request_no)
+          loan_due_date,
+          created_at,
+          sender_staff_name,
+          receiver_staff_name,
+          from_loc:locations!transfer_requests_from_location_id_fkey(name),
+          to_loc:locations!transfer_requests_to_location_id_fkey(name)
         `)
-        .order('borrowed_at', { ascending: false })
+        .eq('type', 'loan')
+        .order('created_at', { ascending: false })
 
       if (error) throw error
       if (!data || data.length === 0) {
@@ -267,24 +274,28 @@ export default function UsagePage() {
 
       const headers = [
         'เลขที่เอกสาร',
-        'ชื่ออุปกรณ์ที่ยืม',
-        'รหัสอะไหล่',
-        'ผู้ยืม',
-        'เบอร์โทร',
-        'วันที่ยืม',
-        'กำหนดคืน',
+        'App No.',
+        'Terminal Name / เครื่องมือ',
+        'สถานที่ให้ยืม (ต้นทาง)',
+        'สถานที่ยืม (ปลายทาง)',
+        'ผู้ส่ง/ให้ยืม',
+        'ผู้รับ/ผู้ยืม',
+        'วันที่ทำรายการ',
+        'กำหนดส่งคืน',
         'สถานะการยืม',
       ]
 
       const rows = data.map((l: any) => [
-        l.request?.request_no || '',
-        l.item?.item_name || '',
-        l.item?.part_number || '-',
-        l.borrower_name || '',
-        l.borrower_phone || '-',
-        formatDateTime(l.borrowed_at),
-        l.due_date ? formatDateTime(l.due_date) : 'ไม่มีกำหนด',
-        l.status === 'borrowed' ? 'กำลังยืมอยู่' : 'คืนแล้ว',
+        l.request_number || '',
+        l.app_no || '-',
+        l.terminal_name || l.title || '',
+        l.from_loc?.name || '',
+        l.to_loc?.name || '',
+        l.sender_staff_name || '',
+        l.receiver_staff_name || '',
+        formatDateTime(l.created_at),
+        l.loan_due_date ? formatDate(l.loan_due_date) : 'ไม่มีกำหนด',
+        STATUS_LABELS[l.status] || l.status,
       ])
 
       const dateStr = new Date().toISOString().split('T')[0]
@@ -310,7 +321,7 @@ export default function UsagePage() {
           file_size,
           taken_at,
           is_evidence,
-          request:transfer_requests!item_photos_request_id_fkey(request_no)
+          request:transfer_requests!item_photos_request_id_fkey(request_number)
         `)
         .order('taken_at', { ascending: false })
 
@@ -332,7 +343,7 @@ export default function UsagePage() {
       ]
 
       const rows = data.map((p: any) => [
-        p.request?.request_no || '',
+        p.request?.request_number || '',
         PHOTO_STAGE_LABELS[p.photo_stage] || p.photo_stage,
         p.file_name || '',
         p.file_size || 0,

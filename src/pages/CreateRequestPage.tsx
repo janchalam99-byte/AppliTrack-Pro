@@ -548,16 +548,16 @@ export default function CreateRequestPage() {
                 className="w-full bg-slate-950/80 border border-slate-700/80 focus:border-cyan-400 text-white rounded-xl px-3.5 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none transition-all"
               />
               {/* Quick Unit Pills */}
-              <div className="flex flex-wrap gap-1 pt-1">
+              <div className="flex flex-wrap gap-1.5 pt-1">
                 {COMMON_UNITS.map(u => (
                   <button
                     key={u}
                     type="button"
                     onClick={() => setValue('unit', u)}
                     className={cn(
-                      'text-[10px] px-2 py-0.5 rounded-md border transition-all',
+                      'text-xs px-2.5 py-1 rounded-lg border transition-all active:scale-95',
                       watchUnit === u
-                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold'
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold shadow-xs'
                         : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
                     )}
                   >
@@ -702,9 +702,9 @@ export default function CreateRequestPage() {
           <div className="grid grid-cols-2 gap-3 items-center pt-1">
             {/* Origin Location */}
             <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
-              <p className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-                <MapPin size={11} className="text-cyan-400" />
-                <span>ต้นทาง (คนกดส่ง/ฝากของ)</span>
+              <p className="text-[11px] text-slate-400 font-semibold flex items-center gap-1 truncate">
+                <MapPin size={12} className="text-cyan-400 shrink-0" />
+                <span>ต้นทาง (ส่งของ)</span>
               </p>
               <select
                 value={watchFromId}
@@ -719,9 +719,9 @@ export default function CreateRequestPage() {
 
             {/* Destination Location */}
             <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
-              <p className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-                <MapPin size={11} className="text-emerald-400" />
-                <span>ปลายทาง (คนกดยืนยันรับ)</span>
+              <p className="text-[11px] text-slate-400 font-semibold flex items-center gap-1 truncate">
+                <MapPin size={12} className="text-emerald-400 shrink-0" />
+                <span>ปลายทาง (รับของ)</span>
               </p>
               <select
                 value={watchToId}
@@ -956,21 +956,21 @@ export default function CreateRequestPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xl shadow-cyan-500/20 text-sm"
+              className="w-full bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3.5 sm:py-4 px-3 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xl shadow-cyan-500/20 text-xs sm:text-sm"
             >
               {isSubmitting ? (
                 <>
-                  <svg className="animate-spin w-5 h-5 text-white" viewBox="0 0 24 24" fill="none">
+                  <svg className="animate-spin w-5 h-5 text-white shrink-0" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  กำลังบันทึกรายการ...
+                  <span>กำลังบันทึกรายการ...</span>
                 </>
               ) : (
                 <>
-                  <Truck size={18} />
-                  <span>บันทึกและฝากของไปกับรถแล้ว (รอปลายทางรับ)</span>
-                  <ArrowRight size={16} />
+                  <Truck size={18} className="shrink-0" />
+                  <span className="text-center">บันทึกและฝากของไปกับรถแล้ว (รอปลายทางรับ)</span>
+                  <ArrowRight size={16} className="shrink-0" />
                 </>
               )}
             </button>
@@ -978,20 +978,20 @@ export default function CreateRequestPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-500/20 text-sm"
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3.5 sm:py-4 px-3 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-500/20 text-xs sm:text-sm"
             >
               {isSubmitting ? (
                 <>
-                  <svg className="animate-spin w-5 h-5 text-white" viewBox="0 0 24 24" fill="none">
+                  <svg className="animate-spin w-5 h-5 text-white shrink-0" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  กำลังบันทึกรายการ...
+                  <span>กำลังบันทึกรายการ...</span>
                 </>
               ) : (
                 <>
-                  <Save size={18} />
-                  <span>บันทึกรายการ (รอฝากไปกับรถ)</span>
+                  <Save size={18} className="shrink-0" />
+                  <span className="text-center">บันทึกรายการ (รอฝากไปกับรถ)</span>
                 </>
               )}
             </button>

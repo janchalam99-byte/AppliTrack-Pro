@@ -462,14 +462,14 @@ export default function RequestsPage() {
                     </p>
 
                     {/* Bottom Row: Sender & Receiver */}
-                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1.5 border-t border-slate-700/50">
-                      <div className="flex items-center gap-1 text-[11px]">
-                        <span className="text-slate-500">ผู้ส่ง:</span>
-                        <span className="font-semibold text-purple-300">{senderStaff}</span>
+                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1.5 border-t border-slate-700/50 gap-2">
+                      <div className="flex items-center gap-1 text-[11px] min-w-0">
+                        <span className="text-slate-500 shrink-0">ผู้ส่ง:</span>
+                        <span className="font-semibold text-purple-300 truncate">{senderStaff}</span>
                       </div>
-                      <div className="flex items-center gap-1 text-[11px]">
-                        <span className="text-slate-500">ส่งถึง:</span>
-                        <span className="font-bold text-emerald-300">{receiverStaff}</span>
+                      <div className="flex items-center gap-1 text-[11px] min-w-0">
+                        <span className="text-slate-500 shrink-0">ส่งถึง:</span>
+                        <span className="font-bold text-emerald-300 truncate">{receiverStaff}</span>
                       </div>
                     </div>
                   </div>
