@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { 
-  Home, List, ArrowLeftRight, Bell, Settings, Plus, BookOpen, HardDrive
+  Home, List, ArrowLeftRight, Bell, Settings, Plus, BookOpen, HardDrive, WifiOff, CheckCircle2
 } from 'lucide-react'
 import { useAppStore } from '../store/appStore'
 import { useAuth } from '../contexts/AuthContext'
@@ -18,6 +20,32 @@ export default function Layout() {
   const { profile } = useAuth()
   const unreadCount = useAppStore((s) => s.unreadCount)
   const navigate = useNavigate()
+  const qc = useQueryClient()
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const [showBackOnline, setShowBackOnline] = useState(false)
+
+  useEffect(() => {
+    let timer: any = null
+    const handleOnline = () => {
+      setIsOnline(true)
+      setShowBackOnline(true)
+      qc.invalidateQueries()
+      timer = setTimeout(() => setShowBackOnline(false), 3500)
+    }
+
+    const handleOffline = () => {
+      setIsOnline(false)
+      setShowBackOnline(false)
+    }
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+      if (timer) clearTimeout(timer)
+    }
+  }, [qc])
 
   return (
     <div className="flex flex-col min-h-screen bg-[#0f172a]">
@@ -58,6 +86,24 @@ export default function Layout() {
           </div>
         </div>
       </header>
+
+      {/* Network Offline Guardian Banner */}
+      {!isOnline && (
+        <div className="bg-amber-600/95 text-white text-xs px-4 py-2 flex items-center justify-center gap-2 shadow-lg animate-pulse z-50">
+          <WifiOff size={14} className="flex-shrink-0" />
+          <span className="font-semibold text-[11px] text-center">
+            สัญญาณเน็ตขาดหาย (Offline) · ไม่ต้องตกใจ ข้อมูลในหน้านี้ยังอยู่ครบ ระบบจะเชื่อมต่อให้อัตโนมัติเมื่อมีสัญญาณ
+          </span>
+        </div>
+      )}
+      {showBackOnline && (
+        <div className="bg-emerald-600/95 text-white text-xs px-4 py-2 flex items-center justify-center gap-2 shadow-lg z-50 transition-all">
+          <CheckCircle2 size={14} className="flex-shrink-0" />
+          <span className="font-semibold text-[11px]">
+            เชื่อมต่ออินเทอร์เน็ตสำเร็จแล้ว · ข้อมูลอัปเดตเป็นเวอร์ชันล่าสุดเรียบร้อย
+          </span>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 max-w-2xl mx-auto w-full pb-20">

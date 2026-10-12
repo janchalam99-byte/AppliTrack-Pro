@@ -200,6 +200,10 @@ export default function CreateRequestPage() {
 
   const onSubmit = async (data: FormData) => {
     if (!profile) return
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณารอเชื่อมต่อเน็ตก่อนบันทึกรายการ', { icon: '📡' })
+      return
+    }
     setIsSubmitting(true)
 
     try {

@@ -205,6 +205,10 @@ export default function RequestDetailPage() {
 
   const changeStatus = async (newStatus: RequestStatus, notes?: string) => {
     if (!profile || !request) return
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณารอเชื่อมต่อเน็ตก่อนดำเนินการ', { icon: '📡' })
+      return
+    }
     const { error } = await supabase
       .from('transfer_requests')
       .update({ status: newStatus, updated_at: new Date().toISOString() })
