@@ -42,16 +42,19 @@ export async function uploadEvidencePhoto(options: UploadPhotoOptions): Promise<
 
   if (uploadError) throw uploadError
 
-  const { data: signedData } = await supabase.storage
+  // 3. Get permanent public URL directly from Supabase Storage
+  const { data: publicData } = supabase.storage
     .from('item-photos')
-    .createSignedUrl(storagePath, 60 * 60 * 24 * 7)
+    .getPublicUrl(storagePath)
+
+  const publicUrl = publicData?.publicUrl ?? null
 
   const { data: photoRecord, error: dbError } = await supabase
     .from('item_photos')
     .insert({
       request_id: requestId,
       storage_path: storagePath,
-      public_url: signedData?.signedUrl ?? null,
+      public_url: publicUrl,
       storage_provider: 'supabase',
       photo_stage: stage,
       taken_by: userId,

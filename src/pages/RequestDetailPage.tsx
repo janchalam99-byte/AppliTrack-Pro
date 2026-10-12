@@ -984,7 +984,9 @@ export default function RequestDetailPage() {
                 <p className="text-xs font-medium text-slate-500 mb-2">{PHOTO_STAGE_LABELS[stage] ?? stage}</p>
                 <div className="grid grid-cols-3 gap-2">
                   {stagePhotos.map((photo: any) => {
-                    const photoSrc = photo.public_url || (photo.gdrive_file_id ? `/api/gdrive/photo/${photo.gdrive_file_id}` : null)
+                    const photoSrc = photo.public_url
+                      || (photo.storage_path ? supabase.storage.from('item-photos').getPublicUrl(photo.storage_path).data.publicUrl : null)
+                      || (photo.gdrive_file_id ? `/api/gdrive/photo/${photo.gdrive_file_id}` : null)
                     return (
                       <div
                         key={photo.id}
