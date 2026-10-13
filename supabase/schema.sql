@@ -227,15 +227,32 @@ RETURNS TEXT AS $$
 DECLARE
   date_part TEXT;
   prefix TEXT;
+  max_seq INTEGER;
   seq_num INTEGER;
   result TEXT;
 BEGIN
   date_part := TO_CHAR(NOW(), 'YYYYMMDD');
   prefix := CASE WHEN req_type = 'loan' THEN 'LN' ELSE 'TR' END;
-  SELECT COUNT(*) + 1 INTO seq_num
+  
+  -- Extract highest existing sequence number for today
+  SELECT COALESCE(
+    MAX(
+      NULLIF(SUBSTRING(request_number FROM '[0-9]+$'), '')::INTEGER
+    ),
+    0
+  ) INTO max_seq
   FROM public.transfer_requests
   WHERE request_number LIKE prefix || '-' || date_part || '-%';
+
+  seq_num := max_seq + 1;
   result := prefix || '-' || date_part || '-' || LPAD(seq_num::TEXT, 3, '0');
+
+  -- Ensure strictly unique even if gaps or race condition occurred
+  WHILE EXISTS (SELECT 1 FROM public.transfer_requests WHERE request_number = result) LOOP
+    seq_num := seq_num + 1;
+    result := prefix || '-' || date_part || '-' || LPAD(seq_num::TEXT, 3, '0');
+  END LOOP;
+
   RETURN result;
 END;
 $$ LANGUAGE plpgsql;
@@ -453,4 +470,20 @@ ON CONFLICT (id) DO UPDATE SET
   email = EXCLUDED.email,
   full_name = EXCLUDED.full_name,
   role = EXCLUDED.role;
+
+-- =============================================
+-- 7. SUPABASE REALTIME REPLICATION
+-- =============================================
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE 
+      public.transfer_requests, 
+      public.transfer_request_items, 
+      public.status_history, 
+      public.notifications;
+  END IF;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 

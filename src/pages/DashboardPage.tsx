@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { 
   Clock, Package, Truck, CheckCircle, AlertTriangle, 
   BookOpen, AlertCircle, ArrowRight, RefreshCw, Compass
@@ -122,18 +123,30 @@ export default function DashboardPage() {
   const { profile } = useAuth()
   const locations = useAppStore((s) => s.locations)
   const navigate = useNavigate()
+  const qc = useQueryClient()
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const { data: stats, isLoading: statsLoading, refetch } = useQuery({
+  const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: fetchDashboardStats,
-    refetchInterval: 30000,
+    refetchInterval: 5000,
   })
 
   const { data: recent, isLoading: recentLoading } = useQuery({
     queryKey: ['recent-requests'],
     queryFn: fetchRecentRequests,
-    refetchInterval: 30000,
+    refetchInterval: 5000,
   })
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true)
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] }),
+      qc.invalidateQueries({ queryKey: ['recent-requests'] }),
+      qc.invalidateQueries({ queryKey: ['requests'] }),
+    ])
+    setTimeout(() => setIsRefreshing(false), 500)
+  }
 
   const statCards: StatCard[] = [
     { 
@@ -154,12 +167,12 @@ export default function DashboardPage() {
       status: 'ready_to_send' 
     },
     { 
-      label: 'ยืม-คืนเครื่องมือ', 
-      count: stats?.active_loans ?? 0, 
-      icon: BookOpen, 
-      color: 'text-indigo-400', 
-      bg: 'bg-indigo-400/10 border-indigo-400/20', 
-      status: 'loan' 
+      label: 'รับของแล้ววันนี้', 
+      count: stats?.completed_today ?? 0, 
+      icon: CheckCircle, 
+      color: 'text-emerald-400', 
+      bg: 'bg-emerald-400/10 border-emerald-400/20', 
+      status: 'completed' 
     },
     { 
       label: 'พบปัญหา / รับไม่ครบ', 
@@ -198,10 +211,11 @@ export default function DashboardPage() {
           </div>
         </div>
         <button
-          onClick={() => refetch()}
+          onClick={handleManualRefresh}
           className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors touch-feedback"
+          title="แตะเพื่อรีเฟรชข้อมูลด่วน"
         >
-          <RefreshCw size={18} />
+          <RefreshCw size={18} className={cn(isRefreshing && "animate-spin text-cyan-400")} />
         </button>
       </div>
 
@@ -270,11 +284,7 @@ export default function DashboardPage() {
                 <button
                   key={card.status}
                   onClick={() => {
-                    if (card.status === 'loan' || card.status === 'overdue') {
-                      navigate('/loans')
-                    } else {
-                      navigate(`/requests?status=${card.status}`)
-                    }
+                    navigate(`/requests?status=${card.status}`)
                   }}
                   className={cn(
                     'rounded-2xl border p-4 text-left transition-all active:scale-95 touch-feedback',

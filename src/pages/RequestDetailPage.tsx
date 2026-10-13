@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, Package, Clock, Truck, CheckCircle, AlertTriangle,
   Camera, RefreshCw, ChevronDown, ChevronUp, MapPin, User, Calendar,
-  X, AlertCircle, BookOpen, RotateCcw, Trash2, Edit3, ShieldAlert, Save
+  X, AlertCircle, BookOpen, RotateCcw, Trash2, Edit3, ShieldAlert, Save, ArrowRightLeft
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -64,18 +64,29 @@ export default function RequestDetailPage() {
   const [problemType, setProblemType] = useState<string>('incomplete')
   const [isDepositing, setIsDepositing] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+  const [receiverStaffInput, setReceiverStaffInput] = useState('')
+
+  useEffect(() => {
+    if (profile?.full_name && !receiverStaffInput) {
+      setReceiverStaffInput(profile.full_name)
+    }
+  }, [profile, receiverStaffInput])
 
   const { data: request, isLoading, error, refetch } = useQuery({
     queryKey: ['request', id],
     queryFn: () => fetchRequestDetail(id!),
     enabled: !!id,
-    refetchInterval: 30000, // 30s ประหยัด bandwidth / egress โควต้าฟรี
+    refetchInterval: 5000, // 5s fallback polling
   })
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['request', id] })
     qc.invalidateQueries({ queryKey: ['requests'] })
     qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    qc.invalidateQueries({ queryKey: ['recent-requests'] })
+    qc.invalidateQueries({ queryKey: ['history'] })
+    qc.invalidateQueries({ queryKey: ['tool-journey'] })
+    qc.invalidateQueries({ queryKey: ['usage'] })
   }
 
   // Admin Controls State
@@ -234,8 +245,8 @@ export default function RequestDetailPage() {
     if (others?.length) {
       const notifType = newStatus === 'in_transit' ? 'deposited'
         : newStatus === 'completed' ? 'return_received'
-        : newStatus === 'problem_reported' ? 'problem_reported'
-        : 'request_confirmed'
+          : newStatus === 'problem_reported' ? 'problem_reported'
+            : 'request_confirmed'
 
       await supabase.from('notifications').insert(
         others.map((p: any) => ({
@@ -418,10 +429,13 @@ export default function RequestDetailPage() {
         newStatus = 'partially_received'
       }
 
+      const finalReceiver = receiverStaffInput.trim() || profile.full_name || 'ผู้รับ'
+
       await supabase.from('transfer_requests').update({
         status: newStatus,
         received_at: new Date().toISOString(),
         received_by: profile.id,
+        receiver_staff_name: finalReceiver,
       }).eq('id', request.id)
 
       await supabase.from('status_history').insert({
@@ -429,7 +443,7 @@ export default function RequestDetailPage() {
         from_status: request.status,
         to_status: newStatus,
         changed_by: profile.id,
-        notes: hasProblem ? `แจ้งปัญหา: ${actionNotes}` : 'ยืนยันรับของ',
+        notes: hasProblem ? `แจ้งปัญหา: ${actionNotes}` : `ยืนยันรับของแล้ว (ผู้รับ: ${finalReceiver})`,
       })
 
       // Notify
@@ -908,8 +922,10 @@ export default function RequestDetailPage() {
             <p className="text-purple-300 font-bold mt-0.5">{request.sender_staff_name || request.requester?.full_name || '-'}</p>
           </div>
           <div>
-            <p className="text-slate-400 flex items-center gap-1"><User size={11} className="text-emerald-400" /> ส่งให้ใคร ({request.to_location?.name})</p>
-            <p className="text-emerald-300 font-bold mt-0.5">{request.receiver_staff_name || '-'}</p>
+            <p className="text-slate-400 flex items-center gap-1"><User size={11} className="text-emerald-400" /> ผู้รับ ({request.to_location?.name})</p>
+            <p className="text-emerald-300 font-bold mt-0.5">
+              {request.receiver_staff_name || (request.received_at ? (request.received_by_profile?.full_name || 'รับแล้ว') : 'รอปลายทางลงชื่อรับ')}
+            </p>
           </div>
           <div>
             <p className="text-slate-400">เวลาฝากขึ้นรถ</p>
@@ -1045,10 +1061,10 @@ export default function RequestDetailPage() {
                 className={cn(
                   'w-full font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 touch-feedback text-sm shadow-lg',
                   action.variant === 'primary' ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white shadow-blue-500/25' :
-                  action.variant === 'success' ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 text-white shadow-emerald-500/25' :
-                  action.variant === 'warning' ? 'bg-orange-500/20 border border-orange-500/30 text-orange-400' :
-                  action.variant === 'danger' ? 'bg-red-500/20 border border-red-500/30 text-red-400' :
-                  'bg-slate-700 text-slate-300 border border-slate-600'
+                    action.variant === 'success' ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 text-white shadow-emerald-500/25' :
+                      action.variant === 'warning' ? 'bg-orange-500/20 border border-orange-500/30 text-orange-400' :
+                        action.variant === 'danger' ? 'bg-red-500/20 border border-red-500/30 text-red-400' :
+                          'bg-slate-700 text-slate-300 border border-slate-600'
                 )}
               >
                 <action.icon size={18} />
@@ -1109,14 +1125,29 @@ export default function RequestDetailPage() {
 
         {/* Case D: Completed */}
         {request.status === 'completed' && (
-          <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-4 text-xs space-y-1.5 backdrop-blur-md">
+          <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-4 text-xs space-y-2.5 backdrop-blur-md">
             <div className="flex items-center gap-2 font-bold text-emerald-300 text-sm">
               <CheckCircle size={18} className="text-emerald-400" />
               <span>🎉 ปิดงานเรียบร้อย (ได้รับของครบแล้ว)</span>
             </div>
             <p className="text-slate-300 text-xs">
-              {request.to_location?.name} ยืนยันรับของเรียบร้อยเมื่อ {formatDateTime(request.received_at)} โดย {request.receiver_staff_name || 'ผู้รับ'}
+              {request.to_location?.name} ยืนยันรับของเรียบร้อยเมื่อ {formatDateTime(request.received_at)} โดย <strong className="text-white">{request.receiver_staff_name || request.received_by_profile?.full_name || 'ผู้รับ'}</strong>
             </p>
+            {/* 1-Click Send Back Button */}
+            <div className="pt-2 border-t border-emerald-500/20">
+              <button
+                type="button"
+                onClick={() => {
+                  const appNoParam = request.app_no ? `&app_no=${encodeURIComponent(request.app_no)}` : ''
+                  const nameParam = `&name=${encodeURIComponent(items[0]?.name || request.terminal_name)}`
+                  navigate(`/requests/new?from=${request.to_location_id}&to=${request.from_location_id}${appNoParam}${nameParam}`)
+                }}
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/25 active:scale-95 transition-all"
+              >
+                <ArrowRightLeft size={14} />
+                <span>🔄 ส่งของชิ้นนี้กลับไปที่ {request.from_location?.name || 'ไซต์เดิม'}</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -1182,11 +1213,21 @@ export default function RequestDetailPage() {
           secondaryLabel="แจ้งปัญหา / รับไม่ครบ"
           onSecondary={() => handleConfirmReceipt(true)}
         >
-          <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-200 space-y-1">
-            <p className="font-bold text-white">⚡ ระบบจะบันทึกวันเวลาที่รับจริงอัตโนมัติ</p>
-            <p className="text-slate-300">
-              ผู้รับ: <strong className="text-white">{profile?.full_name}</strong> · รายการนี้จะปิดงานสมบูรณ์
+          <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-200 space-y-2">
+            <p className="font-bold text-white flex items-center justify-between">
+              <span>⚡ ลงชื่อรับของจริง</span>
+              <span className="text-[10px] text-emerald-300 font-normal">(บันทึกวันเวลาอัตโนมัติ)</span>
             </p>
+            <div className="space-y-1">
+              <label className="text-[11px] text-slate-300 block font-semibold">ชื่อผู้ลงชื่อรับของ:</label>
+              <input
+                type="text"
+                value={receiverStaffInput}
+                onChange={e => setReceiverStaffInput(e.target.value)}
+                placeholder="ระบุชื่อผู้รับของ..."
+                className="w-full bg-slate-900 border border-emerald-500/50 focus:border-emerald-400 text-white font-bold rounded-lg px-3 py-2 text-xs focus:outline-none"
+              />
+            </div>
           </div>
           <PhotoUploader
             stage="receipt"
@@ -1432,20 +1473,20 @@ function getAvailableActions(
     if (isSender || isAdmin) {
       actions.push({ id: 'deposit', label: '🚚 กด “ฝากของไปกับรถแล้ว”', icon: Truck, variant: 'primary' })
     }
-  } 
+  }
   // Step 4: ผู้รับกดยืนยัน (ผู้รับปลายทาง หรือ Admin เป็นคนกด)
   else if (['in_transit', 'partially_received'].includes(status)) {
     if (isReceiver || isAdmin) {
       const targetLabel = toLocationName ? `${toLocationName} กดยืนยันรับของ` : 'ผู้รับกดยืนยันรับของ'
       actions.push({ id: 'receive', label: `✅ ${targetLabel} (ปิดงาน)`, icon: CheckCircle, variant: 'success' })
     }
-  } 
+  }
   // Loan Return Flow (if loan)
   else if (status === 'completed') {
     if (type === 'loan' && (isReceiver || isAdmin)) {
       actions.push({ id: 'return_deposit', label: 'เริ่มส่งคืนเครื่องมือ', icon: RotateCcw, variant: 'primary' })
     }
-  } 
+  }
   else if (['returning', 'return_in_transit', 'partially_returned'].includes(status)) {
     if (isSender || isAdmin) {
       actions.push({ id: 'confirm_return', label: 'ยืนยันรับคืน', icon: CheckCircle, variant: 'success' })
@@ -1473,15 +1514,15 @@ function ActionPanel({
     <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 space-y-4">
       <h3 className="text-sm font-bold text-white">{title}</h3>
       {children}
-      <div className="flex flex-col sm:flex-row gap-2 pt-2">
+      <div className="flex gap-2 pt-2">
         <button
           onClick={onConfirm}
           disabled={isLoading}
           className={cn(
-            'w-full sm:flex-1 py-3.5 sm:py-3 px-4 rounded-2xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50 text-center',
+            'flex-1 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50',
             confirmVariant === 'success'
-              ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-600/20'
-              : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/20'
+              ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white'
+              : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
           )}
         >
           {isLoading ? 'กำลังบันทึก...' : confirmLabel}
@@ -1489,7 +1530,7 @@ function ActionPanel({
         {secondaryLabel && onSecondary && (
           <button
             onClick={onSecondary}
-            className="w-full sm:flex-1 py-3 sm:py-3 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-orange-500/20 border border-orange-500/30 text-orange-400 hover:bg-orange-500/30 transition-all active:scale-95 text-center"
+            className="flex-1 py-3 rounded-2xl font-bold text-sm bg-orange-500/20 border border-orange-500/30 text-orange-400 transition-all active:scale-95"
           >
             {secondaryLabel}
           </button>

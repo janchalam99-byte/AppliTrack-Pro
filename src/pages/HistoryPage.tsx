@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search, Archive, ArrowRight, Trash2 } from 'lucide-react'
+import { Search, Archive, ArrowRight, Trash2, RefreshCw } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
@@ -41,11 +41,19 @@ export default function HistoryPage() {
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const { data: history, isLoading } = useQuery({
     queryKey: ['history', debouncedSearch],
     queryFn: () => fetchHistory(debouncedSearch),
+    refetchInterval: 5000,
   })
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true)
+    await qc.invalidateQueries({ queryKey: ['history'] })
+    setTimeout(() => setIsRefreshing(false), 500)
+  }
 
   const handleDeleteHistory = async (e: React.MouseEvent, req: any) => {
     e.stopPropagation()
@@ -65,17 +73,26 @@ export default function HistoryPage() {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="pt-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-xl font-bold text-white">ประวัติ</h1>
-          {profile?.role === 'admin' && (
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
-              <span>👑</span>
-              <span>โหมด Admin ลบประวัติได้</span>
-            </span>
-          )}
+      <div className="pt-2 flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl font-bold text-white">ประวัติ</h1>
+            {profile?.role === 'admin' && (
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                <span>👑</span>
+                <span>โหมด Admin ลบประวัติได้</span>
+              </span>
+            )}
+          </div>
+          <p className="text-slate-500 text-sm mt-0.5">รายการที่เสร็จสิ้นหรือยกเลิกแล้ว</p>
         </div>
-        <p className="text-slate-500 text-sm mt-0.5">รายการที่เสร็จสิ้นหรือยกเลิกแล้ว</p>
+        <button
+          onClick={handleManualRefresh}
+          className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-colors touch-feedback"
+          title="รีเฟรชประวัติด่วน"
+        >
+          <RefreshCw size={16} className={cn(isRefreshing && "animate-spin text-blue-400")} />
+        </button>
       </div>
 
       {/* Search */}

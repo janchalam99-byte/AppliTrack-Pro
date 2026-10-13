@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { 
-  Home, List, ArrowLeftRight, Bell, Settings, Plus, BookOpen, HardDrive, WifiOff, CheckCircle2
+import {
+  Home, List, ArrowLeftRight, Bell, Settings, Plus, BookOpen, HardDrive, WifiOff, CheckCircle2, Compass
 } from 'lucide-react'
 import { useAppStore } from '../store/appStore'
 import { useAuth } from '../contexts/AuthContext'
+import { useRealtimeSync } from '../hooks/useRealtimeSync'
 import { cn } from '../lib/utils'
 
 const navItems = [
   { to: '/', icon: Home, label: 'หน้าหลัก', exact: true },
   { to: '/requests', icon: List, label: 'รายการ', exact: false },
-  { to: '/loans', icon: BookOpen, label: 'ยืม-คืน', exact: false },
+  { to: '/tool-journey', icon: Compass, label: 'เช็คตำแหน่ง', exact: false },
   { to: '/notifications', icon: Bell, label: 'แจ้งเตือน', exact: false },
   { to: '/settings', icon: Settings, label: 'ตั้งค่า', exact: false },
 ]
@@ -21,6 +22,7 @@ export default function Layout() {
   const unreadCount = useAppStore((s) => s.unreadCount)
   const navigate = useNavigate()
   const qc = useQueryClient()
+  useRealtimeSync()
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [showBackOnline, setShowBackOnline] = useState(false)
 
@@ -51,43 +53,42 @@ export default function Layout() {
     <div className="flex flex-col min-h-screen bg-[#090d16] bg-tech-grid">
       {/* Top Header */}
       <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-xl border-b border-white/10 safe-top">
-        <div className="flex items-center justify-between px-3 sm:px-4 h-14 max-w-2xl mx-auto w-full gap-2">
-          <div className="flex items-center gap-2 sm:gap-2.5 cursor-pointer group min-w-0 shrink" onClick={() => navigate('/')}>
-            <div className="w-8 h-8 shrink-0 rounded-xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-cyan-500/20 group-hover:scale-105 transition-transform">
+        <div className="flex items-center justify-between px-4 h-14 max-w-2xl mx-auto w-full">
+          <div className="flex items-center gap-2.5 cursor-pointer group" onClick={() => navigate('/')}>
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-cyan-500/20 group-hover:scale-105 transition-transform">
               <span className="text-base select-none">⚡</span>
             </div>
-            <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
-              <span className="font-extrabold text-white text-sm sm:text-base tracking-tight font-sans truncate">AppliTrack</span>
-              <span className="text-[9px] sm:text-[10px] font-black px-1 sm:px-1.5 py-0.5 rounded-md bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-sm shadow-cyan-500/20 shrink-0">PRO</span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-white text-base tracking-tight font-sans">AppliTrack</span>
+              <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-sm shadow-cyan-500/20">PRO</span>
               {profile && (
                 <span className={cn(
-                  "text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-md border flex items-center gap-1 font-mono shrink-0",
+                  "text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 font-mono",
                   profile.email?.includes('2') || profile.home_location_id === '1979ede3-5a7f-4b65-8ccf-de428093458d'
                     ? "bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-xs"
                     : "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-xs"
                 )}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
                   <span>{profile.email?.includes('2') ? 'HET-2' : profile.role === 'admin' ? 'Admin' : 'HET-1'}</span>
                 </span>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/usage')}
-              className="flex items-center gap-1 bg-slate-800/80 hover:bg-slate-700/80 active:scale-95 text-slate-300 hover:text-white text-xs font-medium px-2 sm:px-2.5 py-1.5 rounded-xl border border-slate-700/80 transition-all"
+              className="flex items-center gap-1.5 bg-slate-800/80 hover:bg-slate-700/80 active:scale-95 text-slate-300 hover:text-white text-xs font-medium px-2.5 py-1.5 rounded-xl border border-slate-700/80 transition-all"
               title="ตรวจสอบโควต้าและพื้นที่ (Free Tier)"
             >
-              <HardDrive size={14} className="text-purple-400 shrink-0" />
-              <span className="hidden min-[420px]:inline">โควต้า</span>
+              <HardDrive size={14} className="text-purple-400" />
+              <span>โควต้า</span>
             </button>
             <button
               onClick={() => navigate('/requests/new')}
-              className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white text-xs sm:text-sm font-semibold px-2.5 sm:px-3 py-1.5 rounded-xl shadow-md shadow-blue-500/20 transition-all duration-150 shrink-0"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white text-sm font-semibold px-3 py-1.5 rounded-xl shadow-md shadow-blue-500/20 transition-all duration-150"
             >
-              <Plus size={15} className="shrink-0" />
-              <span className="hidden min-[360px]:inline">สร้างรายการ</span>
-              <span className="min-[360px]:hidden">สร้าง</span>
+              <Plus size={16} />
+              <span>สร้างรายการ</span>
             </button>
           </div>
         </div>

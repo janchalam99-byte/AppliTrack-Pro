@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { 
-  Search, Filter, X, ArrowRight, Package, RefreshCw, 
+import {
+  Search, Filter, X, ArrowRight, Package, RefreshCw,
   LayoutGrid, Table as TableIcon, Sparkles, Tag, User, MapPin, Trash2
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -83,6 +83,7 @@ export default function RequestsPage() {
   const [locationId, setLocationId] = useState(searchParams.get('location') ?? '')
   const [showFilters, setShowFilters] = useState(false)
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const handleDeleteRequest = async (e: React.MouseEvent, req: any) => {
     e.stopPropagation()
@@ -102,10 +103,21 @@ export default function RequestsPage() {
 
   const filters = { search, status, type, locationId }
 
-  const { data: requests, isLoading, refetch } = useQuery({
+  const { data: requests, isLoading } = useQuery({
     queryKey: ['requests', filters],
     queryFn: () => fetchRequests(filters),
+    refetchInterval: 5000,
   })
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true)
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['requests'] }),
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] }),
+      qc.invalidateQueries({ queryKey: ['recent-requests'] }),
+    ])
+    setTimeout(() => setIsRefreshing(false), 500)
+  }
 
   const handleSearch = useCallback((val: string) => {
     setSearch(val)
@@ -160,11 +172,11 @@ export default function RequestsPage() {
           </div>
 
           <button
-            onClick={() => refetch()}
+            onClick={handleManualRefresh}
             className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-colors"
-            title="รีเฟรช"
+            title="รีเฟรชข้อมูลด่วน"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={15} className={cn(isRefreshing && "animate-spin text-blue-400")} />
           </button>
 
           <button
@@ -330,8 +342,11 @@ export default function RequestsPage() {
             </thead>
             <tbody className="divide-y divide-slate-700/60 font-mono text-[11px]">
               {requests.map((req) => {
+                const isMultiItem = (req.items?.length || 0) > 1
                 const item = req.items?.[0]
-                const qtyText = item ? `${item.quantity_sent} ${item.unit || 'ชุด'}` : '-'
+                const qtyText = isMultiItem
+                  ? `${req.items.length} รายการ`
+                  : (item ? `${item.quantity_sent} ${item.unit || 'ชุด'}` : '-')
                 return (
                   <tr
                     key={req.id}
@@ -397,8 +412,11 @@ export default function RequestsPage() {
             const senderStaff = req.sender_staff_name || req.requester?.full_name || '-'
             const receiverStaff = req.receiver_staff_name || '-'
             const remark = req.remark_base || req.notes
+            const isMultiItem = (req.items?.length || 0) > 1
             const item = req.items?.[0]
-            const qtyText = item ? `${item.quantity_sent} ${item.unit || 'ชุด'}` : null
+            const qtyText = isMultiItem
+              ? `${req.items.length} รายการ`
+              : (item ? `${item.quantity_sent} ${item.unit || 'ชุด'}` : null)
 
             return (
               <button
@@ -462,14 +480,14 @@ export default function RequestsPage() {
                     </p>
 
                     {/* Bottom Row: Sender & Receiver */}
-                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1.5 border-t border-slate-700/50 gap-2">
-                      <div className="flex items-center gap-1 text-[11px] min-w-0">
-                        <span className="text-slate-500 shrink-0">ผู้ส่ง:</span>
-                        <span className="font-semibold text-purple-300 truncate">{senderStaff}</span>
+                    <div className="flex items-center justify-between text-xs text-slate-400 pt-1.5 border-t border-slate-700/50">
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <span className="text-slate-500">ผู้ส่ง:</span>
+                        <span className="font-semibold text-purple-300">{senderStaff}</span>
                       </div>
-                      <div className="flex items-center gap-1 text-[11px] min-w-0">
-                        <span className="text-slate-500 shrink-0">ส่งถึง:</span>
-                        <span className="font-bold text-emerald-300 truncate">{receiverStaff}</span>
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <span className="text-slate-500">ส่งถึง:</span>
+                        <span className="font-bold text-emerald-300">{receiverStaff}</span>
                       </div>
                     </div>
                   </div>

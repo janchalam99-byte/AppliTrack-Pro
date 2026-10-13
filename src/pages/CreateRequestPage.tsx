@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { 
   ChevronLeft, Save, Package, ArrowRightLeft, 
   Search, Check, Sparkles, User, Tag, HardDrive, Plus, X, 
-  Truck, ArrowRight, MapPin, Layers, Hash
+  Truck, ArrowRight, MapPin, Layers, Hash, Trash2
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -21,16 +22,25 @@ import {
 import { uploadEvidencePhoto } from '../lib/photoUpload'
 import toast from 'react-hot-toast'
 
+export interface SendItem {
+  id: string
+  terminal_name: string
+  app_no: string
+  quantity: number | string
+  unit: string
+  notes?: string
+}
+
 const formSchema = z.object({
   type: z.enum(['transfer', 'loan']),
-  terminal_name: z.string().min(1, 'กรุณาระบุชื่อสิ่งของหรือรายการที่ส่ง'),
+  terminal_name: z.string().optional(),
   app_no: z.string().optional(),
-  quantity: z.coerce.number().min(0.01, 'กรุณาระบุจำนวนที่มากกว่า 0'),
-  unit: z.string().min(1, 'กรุณาระบุหน่วยนับ'),
+  quantity: z.coerce.number().optional(),
+  unit: z.string().optional(),
   from_location_id: z.string().min(1, 'กรุณาเลือกสถานที่ต้นทาง'),
   to_location_id: z.string().min(1, 'กรุณาเลือกสถานที่ปลายทาง'),
   sender_staff_name: z.string().min(1, 'กรุณาระบุชื่อผู้ส่ง'),
-  receiver_staff_name: z.string().min(1, 'กรุณาระบุชื่อผู้รับปลายทาง (ส่งให้ใคร)'),
+  receiver_staff_name: z.string().optional(),
   deposit_immediately: z.boolean(),
   remark_base: z.string().optional(),
   notes: z.string().optional(),
@@ -47,6 +57,8 @@ const COMMON_UNITS = ['ชุด', 'ชิ้น', 'กล่อง', 'อัน
 
 export default function CreateRequestPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const qc = useQueryClient()
   const { profile } = useAuth()
   const locations = useAppStore((s) => s.locations)
   const [photos, setPhotos] = useState<UploadedPhoto[]>([])
@@ -77,38 +89,66 @@ export default function CreateRequestPage() {
   const defaultFromId = isUserHet2 ? (het2?.id || locations[0]?.id || '') : (het1?.id || locations[0]?.id || '')
   const defaultToId = isUserHet2 ? (het1?.id || locations[1]?.id || '') : (het2?.id || locations[1]?.id || '')
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      type: 'transfer',
+  // Dynamic send items state (supports adding multiple items to 1 request)
+  const [items, setItems] = useState<SendItem[]>([
+    {
+      id: 'item-1',
       terminal_name: '',
       app_no: '',
       quantity: 1,
       unit: 'ชุด',
+      notes: '',
+    }
+  ])
+  const [activeSearchIndex, setActiveSearchIndex] = useState<number | null>(null)
+
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      type: 'transfer',
       from_location_id: defaultFromId,
       to_location_id: defaultToId,
       sender_staff_name: profile?.full_name || '',
       receiver_staff_name: '',
       deposit_immediately: false,
-      remark_base: 'พร้อมฐาน App',
+      remark_base: '',
       notes: '',
     },
   })
 
+  // Handle return items from query parameters (e.g. ?from=...&to=...&app_no=...&name=...)
+  useEffect(() => {
+    const retFrom = searchParams.get('from')
+    const retTo = searchParams.get('to')
+    const appNo = searchParams.get('app_no')
+    const name = searchParams.get('name')
+    if (retFrom) setValue('from_location_id', retFrom)
+    if (retTo) setValue('to_location_id', retTo)
+    if (name || appNo) {
+      setItems([
+        {
+          id: 'item-1',
+          terminal_name: name || appNo || '',
+          app_no: appNo || '',
+          quantity: 1,
+          unit: 'ชุด',
+          notes: '',
+        }
+      ])
+    }
+  }, [searchParams, setValue])
+
   const watchType = watch('type')
   const watchFromId = watch('from_location_id')
   const watchToId = watch('to_location_id')
-  const watchAppNo = watch('app_no')
-  const watchTerminalName = watch('terminal_name')
   const watchSenderStaff = watch('sender_staff_name')
   const watchReceiverStaff = watch('receiver_staff_name')
   const watchRemarkBase = watch('remark_base')
-  const watchUnit = watch('unit')
   const watchDepositImmediately = watch('deposit_immediately')
 
   // Automatically sync initial location defaults when locations or profile load
   useEffect(() => {
-    if (locations.length >= 2) {
+    if (locations.length >= 2 && !searchParams.get('from')) {
       const h1 = locations.find(l => l.name.toUpperCase().includes('1') || l.name.toUpperCase().includes('HET-1'))
       const h2 = locations.find(l => l.name.toUpperCase().includes('2') || l.name.toUpperCase().includes('HET-2'))
       const userAtHet2 = profile?.email?.includes('2') || (h2 && profile?.home_location_id === h2.id)
@@ -119,7 +159,7 @@ export default function CreateRequestPage() {
       if (targetFrom && !watchFromId) setValue('from_location_id', targetFrom)
       if (targetTo && !watchToId) setValue('to_location_id', targetTo)
     }
-  }, [locations, profile, setValue, watchFromId, watchToId])
+  }, [locations, profile, setValue, watchFromId, watchToId, searchParams])
 
   // Route helper functions (HET 1 sends -> HET 2 receives; HET 2 sends -> HET 1 receives)
   const handleSelectRoute = (route: '1_to_2' | '2_to_1') => {
@@ -161,6 +201,7 @@ export default function CreateRequestPage() {
     function handleClickOutside(event: MouseEvent) {
       if (searchBoxRef.current && !searchBoxRef.current.contains(event.target as Node)) {
         setShowSuggestions(false)
+        setActiveSearchIndex(null)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -169,9 +210,42 @@ export default function CreateRequestPage() {
 
   const [isSavingToMaster, setIsSavingToMaster] = useState(false)
 
-  // Auto-search suggestions when typing app_no or terminal_name
-  const handleAppSearch = async (val: string) => {
-    setValue('app_no', val)
+  // Item List Management
+  const handleAddItem = () => {
+    setItems(prev => [
+      ...prev,
+      {
+        id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        terminal_name: '',
+        app_no: '',
+        quantity: 1,
+        unit: 'ชุด',
+        notes: '',
+      }
+    ])
+    toast.success('เพิ่มช่องรายการสิ่งของแล้ว', { duration: 1500, icon: '➕' })
+  }
+
+  const handleRemoveItem = (index: number) => {
+    if (items.length <= 1) {
+      toast.error('ต้องมีรายการสิ่งของอย่างน้อย 1 รายการ')
+      return
+    }
+    setItems(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleUpdateItem = (index: number, field: keyof SendItem, value: any) => {
+    setItems(prev => {
+      const next = [...prev]
+      next[index] = { ...next[index], [field]: value }
+      return next
+    })
+  }
+
+  // Auto-search suggestions per item
+  const handleAppSearch = async (index: number, val: string) => {
+    handleUpdateItem(index, 'app_no', val)
+    setActiveSearchIndex(index)
     const clean = val.trim()
     if (clean.length >= 1) {
       const localResults = searchApplicators(clean, 8)
@@ -216,10 +290,26 @@ export default function CreateRequestPage() {
     }
   }
 
-  // Quick save to master from create form
-  const handleQuickSaveToMaster = async () => {
-    const appNo = watchAppNo?.trim() || ''
-    const term = watchTerminalName?.trim() || ''
+  const handleSelectApplicator = (index: number, item: ApplicatorItem) => {
+    setItems(prev => {
+      const next = [...prev]
+      next[index] = {
+        ...next[index],
+        app_no: item.appNo,
+        terminal_name: item.terminalName,
+      }
+      return next
+    })
+    setShowSuggestions(false)
+    setActiveSearchIndex(null)
+    toast.success(`เลือก ${item.appNo} (${item.terminalName})`, { duration: 1500, icon: '⚡' })
+  }
+
+  // Quick save item to master from create form
+  const handleQuickSaveToMaster = async (index: number) => {
+    const it = items[index]
+    const appNo = it?.app_no?.trim() || ''
+    const term = it?.terminal_name?.trim() || ''
     if (!term && !appNo) {
       toast.error('กรุณาระบุ App No หรือชื่อสิ่งของก่อนบันทึกเข้า Master')
       return
@@ -242,13 +332,6 @@ export default function CreateRequestPage() {
     }
   }
 
-  const handleSelectApplicator = (item: ApplicatorItem) => {
-    setValue('app_no', item.appNo)
-    setValue('terminal_name', item.terminalName)
-    setShowSuggestions(false)
-    toast.success(`เลือก ${item.appNo} (${item.terminalName})`, { duration: 1500, icon: '⚡' })
-  }
-
   // Swap direction (HET-1 <-> HET-2)
   const handleSwapLocations = () => {
     setValue('from_location_id', watchToId)
@@ -256,11 +339,47 @@ export default function CreateRequestPage() {
   }
 
   const generateRequestNumber = async (type: string): Promise<string> => {
+    const prefix = type === 'loan' ? 'LN' : 'TR'
     try {
-      const { data } = await supabase.rpc('generate_request_number', { req_type: type })
-      return data ?? `TR-${Date.now()}`
+      const { data, error } = await supabase.rpc('generate_request_number', { req_type: type })
+      if (!error && data) {
+        // Double check uniqueness just in case
+        const { data: existing } = await supabase
+          .from('transfer_requests')
+          .select('id')
+          .eq('request_number', data)
+          .maybeSingle()
+        if (!existing) return data
+      }
     } catch {
-      return `TR-${Date.now()}`
+      // Fallback below
+    }
+
+    // Client-side fallback generator based on current date and latest record
+    const today = new Date()
+    const y = today.getFullYear()
+    const m = String(today.getMonth() + 1).padStart(2, '0')
+    const d = String(today.getDate()).padStart(2, '0')
+    const datePart = `${y}${m}${d}`
+
+    try {
+      const { data: latest } = await supabase
+        .from('transfer_requests')
+        .select('request_number')
+        .ilike('request_number', `${prefix}-${datePart}-%`)
+        .order('request_number', { ascending: false })
+        .limit(1)
+
+      let nextSeq = 1
+      if (latest && latest.length > 0) {
+        const match = latest[0].request_number.match(/(\d+)$/)
+        if (match) {
+          nextSeq = parseInt(match[1], 10) + 1
+        }
+      }
+      return `${prefix}-${datePart}-${String(nextSeq).padStart(3, '0')}`
+    } catch {
+      return `${prefix}-${datePart}-${Date.now().toString().slice(-4)}`
     }
   }
 
@@ -272,6 +391,21 @@ export default function CreateRequestPage() {
     }
     setIsSubmitting(true)
 
+    // Validate all items
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      if (!it.terminal_name.trim() && !it.app_no.trim()) {
+        toast.error(`กรุณาระบุชื่อสิ่งของในรายการที่ ${i + 1}`)
+        setIsSubmitting(false)
+        return
+      }
+      if (!it.quantity || Number(it.quantity) <= 0) {
+        toast.error(`กรุณาระบุจำนวนที่มากกว่า 0 ในรายการที่ ${i + 1}`)
+        setIsSubmitting(false)
+        return
+      }
+    }
+
     try {
       const pendingUploads = photos.filter(p => p.status === 'uploading')
       if (pendingUploads.length > 0) {
@@ -280,28 +414,38 @@ export default function CreateRequestPage() {
         return
       }
 
-      const requestNumber = await generateRequestNumber(data.type)
-      const cleanAppNo = data.app_no?.trim() || ''
-      const cleanTerminal = data.terminal_name.trim()
-      const title = cleanAppNo ? `${cleanAppNo} - ${cleanTerminal}` : cleanTerminal
+      let requestNumber = await generateRequestNumber(data.type)
       const now = new Date().toISOString()
       const isDeposited = Boolean(data.deposit_immediately)
 
       const fromLoc = locations.find(l => l.id === data.from_location_id)
       const toLoc = locations.find(l => l.id === data.to_location_id)
 
+      const validAppNos = items.map(i => i.app_no?.trim()).filter(Boolean) as string[]
+      const cleanAppNo = validAppNos.length > 0 ? validAppNos.join(', ') : null
+      const cleanTerminal = items.map(i => i.terminal_name.trim() || i.app_no?.trim()).filter(Boolean).join(', ')
+
+      const firstItem = items[0]
+      const firstApp = firstItem.app_no?.trim()
+      const firstTerm = firstItem.terminal_name.trim() || firstApp || 'สิ่งของ'
+      const firstItemTitle = firstApp ? `${firstApp} - ${firstTerm}` : firstTerm
+
+      const title = items.length === 1
+        ? firstItemTitle
+        : `${firstItemTitle} และอื่นๆ รวม ${items.length} รายการ`
+
       // Create transfer request
-      const { data: request, error: reqError } = await supabase
+      let reqInsert = await supabase
         .from('transfer_requests')
         .insert({
           request_number: requestNumber,
-          type: data.type,
+          type: 'transfer',
           status: isDeposited ? 'in_transit' : 'ready_to_send',
           title: title,
-          app_no: cleanAppNo || null,
+          app_no: cleanAppNo,
           terminal_name: cleanTerminal,
           sender_staff_name: data.sender_staff_name.trim(),
-          receiver_staff_name: data.receiver_staff_name.trim(),
+          receiver_staff_name: data.receiver_staff_name?.trim() || null,
           remark_base: data.remark_base?.trim() || null,
           notes: data.notes || null,
           from_location_id: data.from_location_id,
@@ -311,34 +455,74 @@ export default function CreateRequestPage() {
           deposited_recorded_at: isDeposited ? now : null,
           deposited_by: isDeposited ? profile.id : null,
           is_deposit_backdated: false,
-          due_date: data.due_date || null,
-          loan_due_date: data.type === 'loan' ? (data.loan_due_date || null) : null,
+          due_date: null,
+          loan_due_date: null,
         })
         .select()
         .single()
 
+      // If duplicate key error, retry once with fresh request number
+      if (reqInsert.error && (reqInsert.error.code === '23505' || reqInsert.error.message?.includes('unique'))) {
+        requestNumber = await generateRequestNumber('transfer')
+        reqInsert = await supabase
+          .from('transfer_requests')
+          .insert({
+            request_number: requestNumber,
+            type: 'transfer',
+            status: isDeposited ? 'in_transit' : 'ready_to_send',
+            title: title,
+            app_no: cleanAppNo,
+            terminal_name: cleanTerminal,
+            sender_staff_name: data.sender_staff_name.trim(),
+            receiver_staff_name: data.receiver_staff_name?.trim() || null,
+            remark_base: data.remark_base?.trim() || null,
+            notes: data.notes || null,
+            from_location_id: data.from_location_id,
+            to_location_id: data.to_location_id,
+            requester_id: profile.id,
+            deposited_at: isDeposited ? now : null,
+            deposited_recorded_at: isDeposited ? now : null,
+            deposited_by: isDeposited ? profile.id : null,
+            is_deposit_backdated: false,
+            due_date: null,
+            loan_due_date: null,
+          })
+          .select()
+          .single()
+      }
+
+      const { data: request, error: reqError } = reqInsert
       if (reqError) throw reqError
 
-      // Create item row with custom quantity & unit
+      // Create item rows with custom quantities & units
+      const itemsToInsert = items.map((it, idx) => {
+        const itemApp = it.app_no?.trim() || ''
+        const itemTerm = it.terminal_name.trim() || itemApp || 'สิ่งของ'
+        const itemName = itemApp ? `${itemApp} - ${itemTerm}` : itemTerm
+        return {
+          request_id: request.id,
+          name: itemName,
+          description: itemTerm,
+          quantity_sent: Number(it.quantity) || 1,
+          quantity_received: 0,
+          quantity_returned: 0,
+          unit: it.unit?.trim() || 'ชุด',
+          sort_order: idx,
+          notes: (it.notes?.trim() || data.remark_base?.trim() || data.notes?.trim()) || null,
+        }
+      })
+
       const { error: itemError } = await supabase
         .from('transfer_request_items')
-        .insert({
-          request_id: request.id,
-          name: cleanAppNo || cleanTerminal,
-          description: cleanTerminal,
-          quantity_sent: data.quantity,
-          quantity_received: 0,
-          unit: data.unit || 'ชุด',
-          sort_order: 0,
-          notes: data.remark_base || null,
-        })
+        .insert(itemsToInsert)
 
       if (itemError) throw itemError
 
       // Record initial status history
+      const totalUnits = items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0)
       const historyNotes = isDeposited
-        ? `สร้างรายการและฝากของไปกับรถแล้ว (ผู้ส่ง: ${data.sender_staff_name} → ผู้รับ: ${data.receiver_staff_name})`
-        : `สร้างรายการ: ${title} จำนวน ${data.quantity} ${data.unit} (ผู้ส่ง: ${data.sender_staff_name} → ผู้รับ: ${data.receiver_staff_name}) [รอฝากไปกับรถ]`
+        ? `สร้างรายการและฝากของ (${items.length} รายการ, รวม ${totalUnits}) ไปกับรถแล้ว (ผู้ส่ง: ${data.sender_staff_name})`
+        : `สร้างรายการ (${items.length} รายการ): ${title} (ผู้ส่ง: ${data.sender_staff_name}) [รอฝากไปกับรถ]`
 
       await supabase.from('status_history').insert({
         request_id: request.id,
@@ -378,7 +562,7 @@ export default function CreateRequestPage() {
             request_id: request.id,
             type: isDeposited ? 'deposited' : 'new_request',
             title: isDeposited ? '🚚 ฝากของไปกับรถแล้ว (รอรับ)' : '📦 มีรายการส่งของใหม่',
-            message: `${fromLoc?.name || 'ต้นทาง'} ส่งของให้ ${data.receiver_staff_name} (${toLoc?.name || 'ปลายทาง'})`,
+            message: `${fromLoc?.name || 'ต้นทาง'} ส่งของไปยัง ${toLoc?.name || 'ปลายทาง'} (ผู้ส่ง: ${data.sender_staff_name})`,
             is_read: false,
           }))
         )
@@ -389,6 +573,13 @@ export default function CreateRequestPage() {
       } else {
         toast.success(`บันทึกรายการเรียบร้อย! รอฝากไปกับรถ`, { duration: 2500, icon: '✅' })
       }
+
+      // Immediately invalidate all caches so Dashboard, Requests, and History show new item instantly
+      qc.invalidateQueries({ queryKey: ['requests'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      qc.invalidateQueries({ queryKey: ['recent-requests'] })
+      qc.invalidateQueries({ queryKey: ['history'] })
+      qc.invalidateQueries({ queryKey: ['tool-journey'] })
 
       navigate(`/requests/${request.id}`)
     } catch (err: any) {
@@ -450,178 +641,225 @@ export default function CreateRequestPage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {/* Type Selection (ส่งของ vs ยืมของ) */}
-        <div className="grid grid-cols-2 gap-3 bg-slate-900/60 p-1.5 rounded-2xl border border-slate-800">
-          <button
-            type="button"
-            onClick={() => setValue('type', 'transfer')}
-            className={cn(
-              'py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all',
-              watchType === 'transfer'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
-                : 'text-slate-400 hover:text-white'
-            )}
-          >
-            <Package size={14} />
-            <span>ฝาก/ส่งของปกติ</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setValue('type', 'loan')}
-            className={cn(
-              'py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all',
-              watchType === 'loan'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
-                : 'text-slate-400 hover:text-white'
-            )}
-          >
-            <Layers size={14} />
-            <span>ยืม-คืนเครื่องมือ (Loan)</span>
-          </button>
+        {/* Banner: ฝาก/ส่งของปกติ */}
+        <div className="flex items-center gap-2.5 py-3 px-4 bg-gradient-to-r from-blue-600/15 via-cyan-500/10 to-transparent border border-blue-500/30 rounded-2xl text-white text-xs font-semibold shadow-xs">
+          <div className="w-7 h-7 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/40 flex items-center justify-center shrink-0">
+            <Package size={16} />
+          </div>
+          <div>
+            <span className="font-bold text-white block">ฝาก/ส่งของปกติข้ามโรงงาน</span>
+            <span className="text-[11px] text-slate-400">ระบบติดตามการเคลื่อนย้ายเครื่องมือและอุปกรณ์ (HET-1 ⇄ HET-2)</span>
+          </div>
         </div>
 
-        {/* STEP 1: ของอะไร & จำนวนเท่าไร */}
-        <div className={cn(
-          "bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-4 shadow-lg backdrop-blur-md relative transition-all",
-          showSuggestions && suggestions.length > 0 ? "z-40" : "z-20"
-        )}>
-          <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
-            <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center text-xs font-bold">1</span>
-            <h2 className="text-sm font-bold text-white">ระบุสิ่งของ & จำนวนที่ส่ง</h2>
-          </div>
-
-          {/* Item Name / Terminal Name (Required) */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-semibold text-slate-300">
-                ของอะไร (ชื่อสิ่งของ / Terminal Name / Part No.) <span className="text-rose-400">*</span>
-              </label>
-              {Boolean(watchTerminalName?.trim() && !isSavingToMaster) && (
-                <button
-                  type="button"
-                  onClick={handleQuickSaveToMaster}
-                  className="text-[10px] text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 px-2 py-0.5 rounded-lg border border-blue-500/20 transition-all"
-                  title="บันทึกเข้าฐานข้อมูล Master ทันที"
-                >
-                  <Plus size={11} />
-                  บันทึกเข้า Master
-                </button>
-              )}
-            </div>
-            <input
-              {...register('terminal_name')}
-              placeholder="เช่น Applicator เบอร์..., สายไฟ, กล่องอะไหล่, อุปกรณ์..."
-              className="w-full bg-slate-950/80 border border-slate-700/80 focus:border-cyan-400 text-white rounded-xl px-3.5 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none transition-all"
-            />
-            {errors.terminal_name && (
-              <p className="text-rose-400 text-xs">{errors.terminal_name.message}</p>
-            )}
-          </div>
-
-          {/* Quantity & Unit */}
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1">
-                <Hash size={13} className="text-cyan-400" />
-                <span>จำนวนเท่าไร</span> <span className="text-rose-400">*</span>
-              </label>
-              <input
-                type="number"
-                step="any"
-                min="0.01"
-                {...register('quantity')}
-                placeholder="ระบุจำนวน เช่น 1, 2, 5"
-                className="w-full bg-slate-950/80 border border-slate-700/80 focus:border-cyan-400 text-white rounded-xl px-3.5 py-2.5 text-sm font-bold placeholder:text-slate-500 focus:outline-none transition-all"
-              />
-              {errors.quantity && (
-                <p className="text-rose-400 text-xs">{errors.quantity.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-300">
-                หน่วยนับ <span className="text-rose-400">*</span>
-              </label>
-              <input
-                {...register('unit')}
-                placeholder="เช่น ชุด, ชิ้น, กล่อง"
-                className="w-full bg-slate-950/80 border border-slate-700/80 focus:border-cyan-400 text-white rounded-xl px-3.5 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none transition-all"
-              />
-              {/* Quick Unit Pills */}
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {COMMON_UNITS.map(u => (
-                  <button
-                    key={u}
-                    type="button"
-                    onClick={() => setValue('unit', u)}
-                    className={cn(
-                      'text-xs px-2.5 py-1 rounded-lg border transition-all active:scale-95',
-                      watchUnit === u
-                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold shadow-xs'
-                        : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
-                    )}
-                  >
-                    {u}
-                  </button>
-                ))}
+        {/* STEP 1: ระบุสิ่งของ & จำนวนที่ส่ง (รองรับการเพิ่มหลายรายการ) */}
+        <div ref={searchBoxRef} className="bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-4 shadow-lg backdrop-blur-md relative z-20">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center text-xs font-bold">1</span>
+              <div>
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>ระบุสิ่งของ & จำนวนที่ส่ง</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">
+                    {items.length} รายการ
+                  </span>
+                </h2>
+                <p className="text-[11px] text-slate-400">สามารถเพิ่มหลายรายการเพื่อส่งไปในเที่ยวรถเดียวกันได้</p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={handleAddItem}
+              className="flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white px-3 py-1.5 rounded-xl shadow-md shadow-cyan-500/20 active:scale-95 transition-all"
+            >
+              <Plus size={14} />
+              <span>เพิ่มรายการ</span>
+            </button>
           </div>
 
-          {/* Optional App No. with Instant Search */}
-          <div ref={searchBoxRef} className="space-y-1.5 relative pt-1 border-t border-slate-800/80 z-30">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                <Search size={12} className="text-blue-400" />
-                <span>รหัส APP NO. (กรณีเป็น Applicator / มีระบบค้นหาด่วน)</span>
-              </label>
-              {watchAppNo && (
-                <button
-                  type="button"
-                  onClick={() => { setValue('app_no', ''); setShowSuggestions(false); }}
-                  className="text-[10px] text-slate-500 hover:text-slate-300"
-                >
-                  ล้าง
-                </button>
-              )}
-            </div>
-            <input
-              value={watchAppNo || ''}
-              onChange={(e) => handleAppSearch(e.target.value)}
-              placeholder="พิมพ์ค้นหา เช่น TW-208, 1234... (ไม่ระบุก็ได้)"
-              className="w-full bg-slate-950/60 border border-slate-800 focus:border-blue-500 text-white font-mono rounded-xl px-3.5 py-2 text-xs placeholder:text-slate-600 focus:outline-none transition-all"
-            />
-
-            {/* Suggestions Dropdown */}
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-50 mt-1.5 bg-[#0f172a] border border-cyan-500/50 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] overflow-hidden max-h-60 overflow-y-auto divide-y divide-slate-800 ring-1 ring-white/15">
-                {suggestions.map((item, idx) => (
-                  <div
-                    key={`${item.appNo}-${item.terminalName}-${idx}`}
-                    onClick={() => handleSelectApplicator(item)}
-                    className="p-3 hover:bg-slate-800/90 cursor-pointer transition-colors flex items-center justify-between text-left group"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-cyan-300 bg-cyan-950/70 px-2 py-0.5 rounded border border-cyan-500/30">
-                          {item.appNo}
-                        </span>
-                        {item.baseLocation && (
-                          <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
-                            📍 {item.baseLocation}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-white group-hover:text-cyan-200 mt-1 font-medium">{item.terminalName}</p>
-                    </div>
-                    <span className="text-[10px] font-bold text-cyan-400 group-hover:text-white bg-cyan-500/10 group-hover:bg-cyan-500 px-2.5 py-1 rounded-lg border border-cyan-500/30 transition-all">
-                      เลือก
+          {/* List of send items */}
+          <div className="space-y-3.5">
+            {items.map((item, idx) => (
+              <div
+                key={item.id}
+                className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/90 hover:border-slate-700/80 space-y-3 transition-all relative"
+              >
+                {/* Item Card Header */}
+                <div className="flex items-center justify-between border-b border-slate-800/60 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-lg bg-slate-800 text-cyan-300 border border-slate-700 flex items-center justify-center text-[11px] font-bold">
+                      {idx + 1}
                     </span>
+                    <span className="text-xs font-bold text-white">
+                      รายการสิ่งของ #{idx + 1}
+                    </span>
+                    {item.app_no && (
+                      <span className="text-[10px] font-mono font-bold text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/30">
+                        {item.app_no}
+                      </span>
+                    )}
                   </div>
-                ))}
+
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(idx)}
+                      className="text-[11px] font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded-lg border border-rose-500/20 flex items-center gap-1 transition-all active:scale-95"
+                      title="ลบรายการนี้"
+                    >
+                      <Trash2 size={12} />
+                      <span>ลบ</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* 1. Item Name / Terminal Name */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      ชื่อสิ่งของ / Terminal Name / Part No. <span className="text-rose-400">*</span>
+                    </label>
+                    {item.terminal_name?.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => handleQuickSaveToMaster(idx)}
+                        disabled={isSavingToMaster}
+                        className="text-[10px] text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 px-2 py-0.5 rounded-lg border border-blue-500/20 transition-all"
+                        title="บันทึกเข้าฐานข้อมูล Master ทันที"
+                      >
+                        <Save size={10} />
+                        บันทึกเข้า Master
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    value={item.terminal_name}
+                    onChange={(e) => handleUpdateItem(idx, 'terminal_name', e.target.value)}
+                    placeholder="เช่น Applicator เบอร์..., สายไฟ, กล่องอะไหล่, อุปกรณ์..."
+                    className="w-full bg-slate-900 border border-slate-700/80 focus:border-cyan-400 text-white rounded-xl px-3.5 py-2 text-sm placeholder:text-slate-500 focus:outline-none transition-all"
+                  />
+                </div>
+
+                {/* 2. Quantity & Unit */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-semibold text-slate-300 flex items-center gap-1">
+                      <Hash size={12} className="text-cyan-400" />
+                      <span>จำนวน</span> <span className="text-rose-400">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.01"
+                      value={item.quantity}
+                      onChange={(e) => handleUpdateItem(idx, 'quantity', e.target.value)}
+                      placeholder="เช่น 1, 2"
+                      className="w-full bg-slate-900 border border-slate-700/80 focus:border-cyan-400 text-white rounded-xl px-3 py-2 text-sm font-bold placeholder:text-slate-500 focus:outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-semibold text-slate-300">
+                      หน่วยนับ <span className="text-rose-400">*</span>
+                    </label>
+                    <input
+                      value={item.unit}
+                      onChange={(e) => handleUpdateItem(idx, 'unit', e.target.value)}
+                      placeholder="เช่น ชุด, ชิ้น"
+                      className="w-full bg-slate-900 border border-slate-700/80 focus:border-cyan-400 text-white rounded-xl px-3 py-2 text-sm placeholder:text-slate-500 focus:outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Unit Pills */}
+                <div className="flex flex-wrap gap-1">
+                  {COMMON_UNITS.map(u => (
+                    <button
+                      key={`${item.id}-${u}`}
+                      type="button"
+                      onClick={() => handleUpdateItem(idx, 'unit', u)}
+                      className={cn(
+                        'text-[10px] px-2 py-0.5 rounded-lg border transition-all active:scale-95',
+                        item.unit === u
+                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold'
+                          : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-white'
+                      )}
+                    >
+                      {u}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 3. Optional App No. with Instant Search */}
+                <div className="space-y-1 relative pt-2 border-t border-slate-800/60">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
+                      <Search size={11} className="text-blue-400" />
+                      <span>รหัส APP NO. (ถ้ามี / พิมพ์เพื่อค้นหาจาก Master)</span>
+                    </label>
+                    {item.app_no && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleUpdateItem(idx, 'app_no', '')
+                          setShowSuggestions(false)
+                        }}
+                        className="text-[10px] text-slate-500 hover:text-slate-300"
+                      >
+                        ล้าง
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    value={item.app_no || ''}
+                    onChange={(e) => handleAppSearch(idx, e.target.value)}
+                    placeholder="พิมพ์ค้นหา เช่น TW-208, 1234... (ไม่ระบุก็ได้)"
+                    className="w-full bg-slate-900/80 border border-slate-800 focus:border-blue-500 text-white font-mono rounded-xl px-3 py-1.5 text-xs placeholder:text-slate-600 focus:outline-none transition-all"
+                  />
+
+                  {/* Dropdown suggestions for this active item */}
+                  {showSuggestions && activeSearchIndex === idx && suggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 z-50 mt-1.5 bg-[#0f172a] border border-cyan-500/50 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] overflow-hidden max-h-60 overflow-y-auto divide-y divide-slate-800 ring-1 ring-white/15">
+                      {suggestions.map((sug, sIdx) => (
+                        <div
+                          key={`${sug.appNo}-${sug.terminalName}-${sIdx}`}
+                          onClick={() => handleSelectApplicator(idx, sug)}
+                          className="p-3 hover:bg-slate-800/90 cursor-pointer transition-colors flex items-center justify-between text-left group"
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-cyan-300 bg-cyan-950/70 px-2 py-0.5 rounded border border-cyan-500/30">
+                                {sug.appNo}
+                              </span>
+                              {sug.baseLocation && (
+                                <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+                                  📍 {sug.baseLocation}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-white group-hover:text-cyan-200 mt-1 font-medium">{sug.terminalName}</p>
+                          </div>
+                          <span className="text-[10px] font-bold text-cyan-400 group-hover:text-white bg-cyan-500/10 group-hover:bg-cyan-500 px-2.5 py-1 rounded-lg border border-cyan-500/30 transition-all">
+                            เลือก
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
+            ))}
           </div>
+
+          {/* Bottom Add Item Button */}
+          <button
+            type="button"
+            onClick={handleAddItem}
+            className="w-full py-3 rounded-xl border border-dashed border-cyan-500/40 hover:border-cyan-400 bg-cyan-500/5 hover:bg-cyan-500/10 text-cyan-400 hover:text-cyan-300 font-bold text-xs flex items-center justify-center gap-2 active:scale-[0.99] transition-all"
+          >
+            <Plus size={16} />
+            <span>+ เพิ่มรายการสิ่งของอีกชิ้น (ส่งพร้อมกันในเที่ยวนี้)</span>
+          </button>
         </div>
 
         {/* STEP 2: ส่งจากที่ไหน ไปที่ไหน (HET 1 ส่ง HET 2 รับ | HET 2 ส่ง HET 1 รับ) */}
@@ -748,53 +986,18 @@ export default function CreateRequestPage() {
           )}
         </div>
 
-        {/* STEP 3: ส่งให้ใคร & ผู้ส่งของ */}
+        {/* STEP 3: ผู้ส่งของ */}
         <div className="bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-4 shadow-lg backdrop-blur-md relative z-0">
           <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
             <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center text-xs font-bold">3</span>
-            <h2 className="text-sm font-bold text-white">ส่งให้ใคร (ผู้รับปลายทาง) & ผู้ส่ง</h2>
-          </div>
-
-          {/* Receiver Staff Name (ส่งให้ใคร) - Required */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
-              <User size={13} className="text-emerald-400" />
-              <span>ส่งให้ใคร (ชื่อผู้รับปลายทางที่ {toLocation?.name || 'ปลายทาง'})</span> <span className="text-rose-400">*</span>
-            </label>
-            <input
-              {...register('receiver_staff_name')}
-              placeholder="ระบุชื่อผู้รับ เช่น คุณสมชาย, ช่างโต้ง, แผนกผลิต..."
-              className="w-full bg-slate-950/80 border border-emerald-500/40 focus:border-emerald-400 text-white rounded-xl px-3.5 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none transition-all shadow-inner"
-            />
-            {errors.receiver_staff_name && (
-              <p className="text-rose-400 text-xs">{errors.receiver_staff_name.message}</p>
-            )}
-
-            {/* Quick Receiver Suggestions from staffOptions */}
-            <div className="pt-1">
-              <p className="text-[10px] text-slate-500 mb-1">แตะด่วนชื่อผู้รับปลายทาง:</p>
-              <div className="flex flex-wrap gap-1.5">
-                {staffOptions.map(name => (
-                  <button
-                    key={`rec-${name}`}
-                    type="button"
-                    onClick={() => setValue('receiver_staff_name', name)}
-                    className={cn(
-                      'text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all active:scale-95',
-                      watchReceiverStaff === name
-                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
-                        : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
-                    )}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
+            <div>
+              <h2 className="text-sm font-bold text-white">ผู้ส่งของ (ต้นทาง {fromLocation?.name || ''})</h2>
+              <p className="text-[11px] text-slate-400">ระบุเฉพาะคนส่ง · ผู้รับปลายทางจะเป็นคนลงชื่อรับของเองเมื่อของส่งถึง</p>
             </div>
           </div>
 
           {/* Sender Staff Name (ชื่อผู้ส่ง) */}
-          <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
+          <div className="space-y-1.5 pt-1">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <User size={13} className="text-purple-400" />
@@ -905,35 +1108,51 @@ export default function CreateRequestPage() {
           </label>
         </div>
 
-        {/* Remarks & Notes (Optional) */}
+        {/* Remarks & Notes */}
         <div className="bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-3 shadow-lg backdrop-blur-md">
           <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold text-slate-300">หมายเหตุเพิ่มเติม (ถ้ามี)</h2>
+            <h2 className="text-xs font-bold text-slate-300">หมายเหตุ (ถ้ามี)</h2>
+            <div className="flex items-center gap-2">
+              {watchRemarkBase && (
+                <button
+                  type="button"
+                  onClick={() => setValue('remark_base', '')}
+                  className="text-[10px] font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20 flex items-center gap-1 active:scale-95 transition-all"
+                >
+                  <X size={11} /> ล้างออก (เว้นว่างไว้)
+                </button>
+              )}
+              <span className="text-[10px] text-slate-500">แตะเพื่อเลือก หรือ แตะซ้ำเพื่อยกเลิก</span>
+            </div>
           </div>
 
           {/* Quick Remark Pills */}
           <div className="flex flex-wrap gap-1.5">
-            {remarkOptions.map(rem => (
-              <button
-                key={rem}
-                type="button"
-                onClick={() => setValue('remark_base', rem)}
-                className={cn(
-                  'text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all active:scale-95',
-                  watchRemarkBase === rem
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                    : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:border-slate-700'
-                )}
-              >
-                {rem}
-              </button>
-            ))}
+            {remarkOptions.map(rem => {
+              const isSelected = watchRemarkBase === rem
+              return (
+                <button
+                  key={rem}
+                  type="button"
+                  onClick={() => setValue('remark_base', isSelected ? '' : rem)}
+                  className={cn(
+                    'text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all active:scale-95 flex items-center gap-1',
+                    isSelected
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                      : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-200'
+                  )}
+                >
+                  <span>{rem}</span>
+                  {isSelected && <X size={10} className="text-amber-300/70" />}
+                </button>
+              )
+            })}
           </div>
 
           <textarea
             {...register('notes')}
             rows={2}
-            placeholder="พิมพ์หมายเหตุเพิ่มเติมได้อิสระ..."
+            placeholder="พิมพ์หมายเหตุเพิ่มเติมได้อิสระ... (ถ้าไม่ระบุจะเว้นว่างไว้)"
             className="w-full bg-slate-950/80 border border-slate-700/80 focus:border-cyan-400 text-white rounded-xl p-3 text-xs placeholder:text-slate-500 focus:outline-none resize-none transition-all"
           />
         </div>

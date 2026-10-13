@@ -209,10 +209,10 @@ export default function ToolJourneyPage() {
                 ไทม์ไลน์การเคลื่อนย้าย ({journey.timeline.length} รายการ)
               </h3>
               <Link
-                to={`/requests/new`}
-                className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1"
+                to={`/requests/new?app_no=${encodeURIComponent(journey.appNo)}&name=${encodeURIComponent(journey.terminalName)}`}
+                className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20 transition-all"
               >
-                + ส่ง/ยืมตัวนี้
+                + ส่งตัวนี้ ➔
               </Link>
             </div>
 
