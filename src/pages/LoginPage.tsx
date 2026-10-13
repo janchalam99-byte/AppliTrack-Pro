@@ -78,6 +78,10 @@ export default function LoginPage() {
   }
 
   const onSubmit = async (data: FormData) => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณาเชื่อมต่อ Wi-Fi หรือเน็ตมือถือ', { icon: '📡' })
+      return
+    }
     if (!isConfigured) {
       toast.error('กรุณาตั้งค่า VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env ก่อนเข้าใช้งาน')
       setShowGuide(true)

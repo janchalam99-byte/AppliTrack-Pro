@@ -1,5 +1,5 @@
 // Service Worker for AppliTrack Pro (PWA)
-const CACHE_NAME = 'applitrack-v4'
+const CACHE_NAME = 'applitrack-v5'
 const PRECACHE_ASSETS = [
   '/icon.svg',
   '/manifest.json'

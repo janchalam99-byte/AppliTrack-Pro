@@ -32,9 +32,13 @@ export function useQuickOptions() {
           if (r.category === 'remark' && !remarkList.includes(r.value)) remarkList.push(r.value)
         })
 
+        // รวมทั้ง COMMON_STAFF และรายการที่บันทึกเพิ่มใน DB เข้าด้วยกันทั้งหมด
+        const allStaff = Array.from(new Set([...COMMON_STAFF, ...staffList]))
+        const allRemarks = Array.from(new Set([...COMMON_REMARKS, ...remarkList]))
+
         return {
-          staff: staffList.length > 0 ? staffList : COMMON_STAFF,
-          remarks: remarkList.length > 0 ? remarkList : COMMON_REMARKS,
+          staff: allStaff,
+          remarks: allRemarks,
         }
       } catch (err) {
         console.warn('Fallback to local quick options:', err)

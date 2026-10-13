@@ -7,6 +7,7 @@ import {
 import { useAppStore } from '../store/appStore'
 import { useAuth } from '../contexts/AuthContext'
 import { useRealtimeSync } from '../hooks/useRealtimeSync'
+import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { cn } from '../lib/utils'
 
 const navItems = [
@@ -21,33 +22,8 @@ export default function Layout() {
   const { profile } = useAuth()
   const unreadCount = useAppStore((s) => s.unreadCount)
   const navigate = useNavigate()
-  const qc = useQueryClient()
   useRealtimeSync()
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
-  const [showBackOnline, setShowBackOnline] = useState(false)
-
-  useEffect(() => {
-    let timer: any = null
-    const handleOnline = () => {
-      setIsOnline(true)
-      setShowBackOnline(true)
-      qc.invalidateQueries()
-      timer = setTimeout(() => setShowBackOnline(false), 3500)
-    }
-
-    const handleOffline = () => {
-      setIsOnline(false)
-      setShowBackOnline(false)
-    }
-
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-      if (timer) clearTimeout(timer)
-    }
-  }, [qc])
+  const { isOnline, showReconnected, isCheckingPing, testConnection } = useNetworkStatus()
 
   return (
     <div className="flex flex-col min-h-screen bg-[#090d16] bg-tech-grid">
@@ -96,18 +72,28 @@ export default function Layout() {
 
       {/* Network Offline Guardian Banner */}
       {!isOnline && (
-        <div className="bg-amber-600/95 text-white text-xs px-4 py-2 flex items-center justify-center gap-2 shadow-lg animate-pulse z-50">
-          <WifiOff size={14} className="flex-shrink-0" />
-          <span className="font-semibold text-[11px] text-center">
-            สัญญาณเน็ตขาดหาย (Offline) · ไม่ต้องตกใจ ข้อมูลในหน้านี้ยังอยู่ครบ ระบบจะเชื่อมต่อให้อัตโนมัติเมื่อมีสัญญาณ
-          </span>
+        <div className="sticky top-14 z-50 bg-gradient-to-r from-amber-600 to-rose-600 text-white text-xs px-3.5 py-2 flex items-center justify-between gap-2 shadow-lg backdrop-blur-md border-b border-amber-400/30 animate-pulse">
+          <div className="flex items-center gap-2">
+            <WifiOff size={15} className="flex-shrink-0 text-amber-200" />
+            <span className="font-semibold text-[11px] leading-tight">
+              สัญญาณเน็ตขาดหาย (Offline) · ไม่ต้องตกใจ ข้อมูลในหน้านี้ยังอยู่ครบ
+            </span>
+          </div>
+          <button
+            type="button"
+            disabled={isCheckingPing}
+            onClick={testConnection}
+            className="shrink-0 bg-white/20 hover:bg-white/30 text-white text-[10px] font-bold px-2 py-1 rounded-lg border border-white/30 active:scale-95 transition-all"
+          >
+            {isCheckingPing ? 'กำลังเช็ค...' : '🔄 เช็คสัญญาณ'}
+          </button>
         </div>
       )}
-      {showBackOnline && (
-        <div className="bg-emerald-600/95 text-white text-xs px-4 py-2 flex items-center justify-center gap-2 shadow-lg z-50 transition-all">
-          <CheckCircle2 size={14} className="flex-shrink-0" />
-          <span className="font-semibold text-[11px]">
-            เชื่อมต่ออินเทอร์เน็ตสำเร็จแล้ว · ข้อมูลอัปเดตเป็นเวอร์ชันล่าสุดเรียบร้อย
+      {showReconnected && (
+        <div className="sticky top-14 z-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs px-3.5 py-2 flex items-center justify-center gap-2 shadow-lg z-50 border-b border-emerald-400/30 transition-all animate-bounce">
+          <CheckCircle2 size={15} className="flex-shrink-0 text-emerald-200" />
+          <span className="font-bold text-[11px]">
+            เชื่อมต่ออินเทอร์เน็ตแล้ว! · ระบบกำลังซิงก์ข้อมูลเวอร์ชันล่าสุดให้เรียบร้อย
           </span>
         </div>
       )}

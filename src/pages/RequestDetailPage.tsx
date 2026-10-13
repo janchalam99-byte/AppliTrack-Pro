@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, Package, Clock, Truck, CheckCircle, AlertTriangle,
   Camera, RefreshCw, ChevronDown, ChevronUp, MapPin, User, Calendar,
-  X, AlertCircle, BookOpen, RotateCcw, Trash2, Edit3, ShieldAlert, Save, ArrowRightLeft
+  X, AlertCircle, BookOpen, RotateCcw, Trash2, Edit3, ShieldAlert, Save, ArrowRightLeft, Plus
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useQuickOptions } from '../hooks/useQuickOptions'
 import { cn, formatDateTime, formatDate, STATUS_LABELS, PHOTO_STAGE_LABELS, formatQuantity, compressImage } from '../lib/utils'
 import PhotoUploader, { type UploadedPhoto } from '../components/PhotoUploader'
 import { uploadEvidencePhoto } from '../lib/photoUpload'
@@ -65,12 +66,17 @@ export default function RequestDetailPage() {
   const [isDepositing, setIsDepositing] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [receiverStaffInput, setReceiverStaffInput] = useState('')
+  const receiverInputInitializedRef = useRef(false)
+  const { staffOptions, addOption } = useQuickOptions()
+  const [isAddingReceiverStaff, setIsAddingReceiverStaff] = useState(false)
+  const [newReceiverStaffName, setNewReceiverStaffName] = useState('')
 
   useEffect(() => {
-    if (profile?.full_name && !receiverStaffInput) {
+    if (profile?.full_name && !receiverInputInitializedRef.current) {
       setReceiverStaffInput(profile.full_name)
+      receiverInputInitializedRef.current = true
     }
-  }, [profile, receiverStaffInput])
+  }, [profile?.full_name])
 
   const { data: request, isLoading, error, refetch } = useQuery({
     queryKey: ['request', id],
@@ -286,6 +292,10 @@ export default function RequestDetailPage() {
 
   const handleDeposit = async () => {
     if (!profile || !request) return
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณารอเชื่อมต่อก่อนฝากของ', { icon: '📡' })
+      return
+    }
     setIsDepositing(true)
 
     try {
@@ -361,6 +371,10 @@ export default function RequestDetailPage() {
 
   const handleConfirmReceipt = async (hasProblem: boolean) => {
     if (!profile || !request) return
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณารอเชื่อมต่อก่อนยืนยันรับของ', { icon: '📡' })
+      return
+    }
 
     try {
       // Upload receipt photos
@@ -475,6 +489,10 @@ export default function RequestDetailPage() {
 
   const handleReturnDeposit = async () => {
     if (!profile || !request) return
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณารอเชื่อมต่อก่อนฝากคืน', { icon: '📡' })
+      return
+    }
     try {
       for (const photo of actionPhotos.filter(p => p.file)) {
         await uploadActionPhoto(photo, request.id, 'pre_return')
@@ -505,6 +523,10 @@ export default function RequestDetailPage() {
 
   const handleConfirmReturn = async () => {
     if (!profile || !request) return
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณารอเชื่อมต่อก่อนยืนยันรับคืน', { icon: '📡' })
+      return
+    }
     try {
       for (const photo of actionPhotos.filter(p => p.file)) {
         await uploadActionPhoto(photo, request.id, 'return_receipt')
@@ -1218,15 +1240,126 @@ export default function RequestDetailPage() {
               <span>⚡ ลงชื่อรับของจริง</span>
               <span className="text-[10px] text-emerald-300 font-normal">(บันทึกวันเวลาอัตโนมัติ)</span>
             </p>
-            <div className="space-y-1">
-              <label className="text-[11px] text-slate-300 block font-semibold">ชื่อผู้ลงชื่อรับของ:</label>
-              <input
-                type="text"
-                value={receiverStaffInput}
-                onChange={e => setReceiverStaffInput(e.target.value)}
-                placeholder="ระบุชื่อผู้รับของ..."
-                className="w-full bg-slate-900 border border-emerald-500/50 focus:border-emerald-400 text-white font-bold rounded-lg px-3 py-2 text-xs focus:outline-none"
-              />
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <User size={13} className="text-emerald-400" />
+                  <span>ชื่อผู้ลงชื่อรับของ:</span>
+                </label>
+                <div className="flex items-center gap-1.5">
+                  {receiverStaffInput && (
+                    <button
+                      type="button"
+                      onClick={() => setReceiverStaffInput('')}
+                      className="text-[10px] font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20 flex items-center gap-1 active:scale-95 transition-all"
+                    >
+                      <X size={11} /> ล้างชื่อ
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingReceiverStaff(!isAddingReceiverStaff)}
+                    className="text-[10px] font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 flex items-center gap-1 active:scale-95 transition-all"
+                  >
+                    <Plus size={11} /> เพิ่มชื่อ
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={receiverStaffInput}
+                  onChange={e => setReceiverStaffInput(e.target.value)}
+                  placeholder="พิมพ์ชื่อผู้รับของ หรือแตะเลือกชื่อด้านล่าง..."
+                  className="w-full bg-slate-950/80 border border-slate-700/80 focus:border-emerald-400 text-white font-bold rounded-xl px-3.5 py-2.5 text-sm placeholder:text-slate-500 focus:outline-none transition-all pr-8"
+                />
+                {receiverStaffInput && (
+                  <button
+                    type="button"
+                    onClick={() => setReceiverStaffInput('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded-full hover:bg-slate-800"
+                    title="ล้างชื่อ"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Receiver Pills - Identical style to Sender Staff */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {profile?.full_name && !staffOptions.includes(profile.full_name) && (
+                  <button
+                    type="button"
+                    onClick={() => setReceiverStaffInput(profile.full_name)}
+                    className={cn(
+                      'text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all active:scale-95 flex items-center gap-1',
+                      receiverStaffInput === profile.full_name
+                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                        : 'bg-slate-950/60 text-slate-300 border-slate-800 hover:text-white'
+                    )}
+                  >
+                    <span>👤</span>
+                    <span>{profile.full_name}</span>
+                    <span className="text-[9px] opacity-70">(ฉัน)</span>
+                  </button>
+                )}
+                {staffOptions.map(name => (
+                  <button
+                    key={`recv-${name}`}
+                    type="button"
+                    onClick={() => setReceiverStaffInput(name)}
+                    className={cn(
+                      'text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all active:scale-95',
+                      receiverStaffInput === name
+                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                        : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
+                    )}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Inline Add Staff Box */}
+              {isAddingReceiverStaff && (
+                <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 space-y-2 mt-2">
+                  <p className="text-[11px] font-semibold text-emerald-300">เพิ่มชื่อพนักงานใหม่:</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={newReceiverStaffName}
+                      onChange={e => setNewReceiverStaffName(e.target.value)}
+                      placeholder="เช่น ช่าง A, น้องบี..."
+                      className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const clean = newReceiverStaffName.trim()
+                        if (clean) {
+                          await addOption('staff', clean)
+                          setReceiverStaffInput(clean)
+                          setNewReceiverStaffName('')
+                          setIsAddingReceiverStaff(false)
+                        }
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all"
+                    >
+                      บันทึก
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingReceiverStaff(false)
+                        setNewReceiverStaffName('')
+                      }}
+                      className="text-slate-400 hover:text-white text-xs px-2"
+                    >
+                      ยกเลิก
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <PhotoUploader

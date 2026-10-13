@@ -219,36 +219,6 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* 4-Step Cross-Plant Workflow Card */}
-      <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-3.5 text-xs space-y-2 backdrop-blur-md">
-        <div className="flex items-center justify-between">
-          <span className="font-bold text-slate-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
-            <span className="text-cyan-400">⚡</span>
-            <span>ระบบรับ-ส่งของข้ามโรงงาน:</span>
-          </span>
-          <span className="text-[10px] text-cyan-400 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
-            HET-1 ⇄ HET-2
-          </span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-          <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300">
-            <span className="font-bold block text-blue-400">1. สร้างรายการ</span>
-            ระบุของ, จำนวน, ส่งให้ใคร
-          </div>
-          <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300">
-            <span className="font-bold block text-cyan-400">2. ฝากขึ้นรถ</span>
-            บันทึกเวลา & ผู้กดอัตโนมัติ
-          </div>
-          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300">
-            <span className="font-bold block text-amber-400">3. รอปลายทางรับ</span>
-            ค้างในระบบจนกว่าจะกดยืนยัน
-          </div>
-          <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
-            <span className="font-bold block text-emerald-400">4. ปลายทางยืนยัน</span>
-            บันทึกเวลารับจริง & ปิดงาน
-          </div>
-        </div>
-      </div>
 
       {/* PWA Floating Install Banner */}
       <PwaInstallBanner variant="banner" />

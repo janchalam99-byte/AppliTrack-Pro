@@ -18,16 +18,45 @@ export default function SettingsPage() {
   const { profile, signOut } = useAuth()
   const locations = useAppStore(s => s.locations)
   const fetchLocations = useAppStore(s => s.fetchLocations)
+  const setUser = useAppStore(s => s.setUser)
   const qc = useQueryClient()
   const [editingLocation, setEditingLocation] = useState<string | null>(null)
   const [locationName, setLocationName] = useState('')
   const [locationDesc, setLocationDesc] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
+  // Profile name editing
+  const [isEditingProfile, setIsEditingProfile] = useState(false)
+  const [profileNameInput, setProfileNameInput] = useState('')
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
+
   // Quick options management
   const { staffOptions, remarkOptions, addOption, removeOption } = useQuickOptions()
   const [newStaff, setNewStaff] = useState('')
   const [newRemark, setNewRemark] = useState('')
+
+  const handleSaveProfileName = async () => {
+    if (!profile) return
+    const cleanName = profileNameInput.trim()
+    if (!cleanName) {
+      toast.error('กรุณาระบุชื่อผู้ใช้')
+      return
+    }
+    setIsSavingProfile(true)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ full_name: cleanName })
+      .eq('id', profile.id)
+
+    setIsSavingProfile(false)
+    if (error) {
+      toast.error(`ไม่สามารถบันทึกชื่อได้: ${error.message}`)
+    } else {
+      setUser({ ...profile, full_name: cleanName })
+      toast.success('บันทึกชื่อผู้ใช้สำเร็จ')
+      setIsEditingProfile(false)
+    }
+  }
 
   const startEditLocation = (loc: Location) => {
     setEditingLocation(loc.id)
@@ -69,24 +98,74 @@ export default function SettingsPage() {
 
       {/* Profile Card */}
       <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-4">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-            <span className="text-white text-lg font-bold">
-              {profile?.full_name?.charAt(0).toUpperCase() ?? 'U'}
-            </span>
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+              <span className="text-white text-lg font-bold">
+                {profile?.full_name?.charAt(0).toUpperCase() ?? 'U'}
+              </span>
+            </div>
+            <div>
+              {!isEditingProfile ? (
+                <>
+                  <p className="text-white font-bold">{profile?.full_name ?? 'ผู้ใช้'}</p>
+                  <p className="text-slate-400 text-xs">{profile?.email}</p>
+                  <span className={cn(
+                    'text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 inline-block',
+                    profile?.role === 'admin'
+                      ? 'bg-blue-500/20 text-blue-400'
+                      : 'bg-slate-600/50 text-slate-400'
+                  )}>
+                    {profile?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้'}
+                  </span>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={profileNameInput}
+                    onChange={e => setProfileNameInput(e.target.value)}
+                    placeholder="ระบุชื่อผู้ใช้..."
+                    className="w-full bg-slate-900 border border-blue-500/50 focus:border-blue-400 text-white font-bold rounded-lg px-2.5 py-1 text-xs focus:outline-none"
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isSavingProfile}
+                      onClick={handleSaveProfileName}
+                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1 active:scale-95 transition-all"
+                    >
+                      <Save size={12} />
+                      <span>{isSavingProfile ? 'กำลังบันทึก...' : 'บันทึก'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingProfile}
+                      onClick={() => setIsEditingProfile(false)}
+                      className="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs transition-all"
+                    >
+                      ยกเลิก
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          <div>
-            <p className="text-white font-bold">{profile?.full_name ?? 'ผู้ใช้'}</p>
-            <p className="text-slate-400 text-xs">{profile?.email}</p>
-            <span className={cn(
-              'text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 inline-block',
-              profile?.role === 'admin'
-                ? 'bg-blue-500/20 text-blue-400'
-                : 'bg-slate-600/50 text-slate-400'
-            )}>
-              {profile?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้'}
-            </span>
-          </div>
+
+          {!isEditingProfile && (
+            <button
+              type="button"
+              onClick={() => {
+                setProfileNameInput(profile?.full_name || '')
+                setIsEditingProfile(true)
+              }}
+              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1.5 rounded-xl border border-blue-500/20 transition-all active:scale-95"
+            >
+              <Edit2 size={12} />
+              <span>เปลี่ยนชื่อ</span>
+            </button>
+          )}
         </div>
 
         {/* Home Location */}

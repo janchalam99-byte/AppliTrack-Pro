@@ -116,6 +116,14 @@ export default function CreateRequestPage() {
     },
   })
 
+  const watchType = watch('type')
+  const watchFromId = watch('from_location_id')
+  const watchToId = watch('to_location_id')
+  const watchSenderStaff = watch('sender_staff_name')
+  const watchReceiverStaff = watch('receiver_staff_name')
+  const watchRemarkBase = watch('remark_base')
+  const watchDepositImmediately = watch('deposit_immediately')
+
   // Handle return items from query parameters (e.g. ?from=...&to=...&app_no=...&name=...)
   useEffect(() => {
     const retFrom = searchParams.get('from')
@@ -138,13 +146,51 @@ export default function CreateRequestPage() {
     }
   }, [searchParams, setValue])
 
-  const watchType = watch('type')
-  const watchFromId = watch('from_location_id')
-  const watchToId = watch('to_location_id')
-  const watchSenderStaff = watch('sender_staff_name')
-  const watchReceiverStaff = watch('receiver_staff_name')
-  const watchRemarkBase = watch('remark_base')
-  const watchDepositImmediately = watch('deposit_immediately')
+  const [hasDraftSaved, setHasDraftSaved] = useState(false)
+
+  // Auto-load draft from localStorage on mount (if no query params)
+  useEffect(() => {
+    if (searchParams.get('from') || searchParams.get('app_no') || searchParams.get('name')) return
+    try {
+      const saved = localStorage.getItem('applitrack_request_draft')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+          setItems(parsed.items)
+          setHasDraftSaved(true)
+        }
+        if (parsed.sender_staff_name) setValue('sender_staff_name', parsed.sender_staff_name)
+        if (parsed.remark_base) setValue('remark_base', parsed.remark_base)
+      }
+    } catch (e) {
+      console.warn('Error restoring draft:', e)
+    }
+  }, [searchParams, setValue])
+
+  // Auto-save draft to localStorage whenever user modifies items or fields
+  useEffect(() => {
+    try {
+      const hasContent = items.some(i => i.terminal_name.trim() || i.app_no?.trim())
+      if (hasContent) {
+        localStorage.setItem('applitrack_request_draft', JSON.stringify({
+          items,
+          sender_staff_name: watchSenderStaff,
+          remark_base: watchRemarkBase,
+        }))
+        setHasDraftSaved(true)
+      }
+    } catch {}
+  }, [items, watchSenderStaff, watchRemarkBase])
+
+  const handleClearDraft = () => {
+    localStorage.removeItem('applitrack_request_draft')
+    setItems([
+      { id: 'item-1', terminal_name: '', app_no: '', quantity: 1, unit: 'ชุด', notes: '' }
+    ])
+    setValue('remark_base', '')
+    setHasDraftSaved(false)
+    toast.success('ล้างข้อมูลร่างเรียบร้อย')
+  }
 
   // Automatically sync initial location defaults when locations or profile load
   useEffect(() => {
@@ -581,6 +627,10 @@ export default function CreateRequestPage() {
       qc.invalidateQueries({ queryKey: ['history'] })
       qc.invalidateQueries({ queryKey: ['tool-journey'] })
 
+      try {
+        localStorage.removeItem('applitrack_request_draft')
+      } catch {}
+
       navigate(`/requests/${request.id}`)
     } catch (err: any) {
       toast.error(`เกิดข้อผิดพลาด: ${err.message}`)
@@ -604,53 +654,29 @@ export default function CreateRequestPage() {
           <ChevronLeft size={20} />
         </button>
         <div>
-          <h1 className="text-lg font-bold text-white flex items-center gap-2">
-            <span>สร้างรายการรับ-ส่งของ</span>
-            <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold">
-              4 ขั้นตอน
-            </span>
-          </h1>
+          <h1 className="text-lg font-bold text-white">สร้างรายการรับ-ส่งของ</h1>
           <p className="text-slate-400 text-xs">ระบุของ, จำนวน, เส้นทาง และผู้รับปลายทาง</p>
         </div>
       </div>
 
-      {/* 4-Step Process Guide Banner */}
-      <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-3.5 text-xs space-y-2 backdrop-blur-md">
-        <p className="font-bold text-slate-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
-          <Sparkles size={13} className="text-cyan-400" />
-          <span>ขั้นตอนการทำงานระบบรับ-ส่ง:</span>
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-          <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300">
-            <span className="font-bold block text-blue-400">1. สร้างรายการ</span>
-            ระบุของ, จำนวน, ส่งให้ใคร
-          </div>
-          <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300">
-            <span className="font-bold block text-cyan-400">2. ฝากของขึ้นรถ</span>
-            กดปุ่มฝาก บันทึกเวลาอัตโนมัติ
-          </div>
-          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300">
-            <span className="font-bold block text-amber-400">3. รอปลายทางรับ</span>
-            ค้างอยู่ในระบบรอคนรับ
-          </div>
-          <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
-            <span className="font-bold block text-emerald-400">4. ผู้รับกดยืนยัน</span>
-            บันทึกเวลารับจริง & ปิดงาน
-          </div>
-        </div>
-      </div>
-
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {/* Banner: ฝาก/ส่งของปกติ */}
-        <div className="flex items-center gap-2.5 py-3 px-4 bg-gradient-to-r from-blue-600/15 via-cyan-500/10 to-transparent border border-blue-500/30 rounded-2xl text-white text-xs font-semibold shadow-xs">
-          <div className="w-7 h-7 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/40 flex items-center justify-center shrink-0">
-            <Package size={16} />
+
+        {/* Offline Draft Auto-Saved Indicator */}
+        {hasDraftSaved && (
+          <div className="flex items-center justify-between bg-slate-900/80 border border-cyan-500/30 rounded-xl px-3.5 py-2 text-xs text-cyan-300 backdrop-blur-md shadow-sm">
+            <span className="flex items-center gap-1.5 text-[11px] font-medium">
+              <span className="text-cyan-400">💾</span>
+              <span>บันทึกร่างอัตโนมัติในเครื่องแล้ว (เน็ตหลุดข้อมูลไม่หาย)</span>
+            </span>
+            <button
+              type="button"
+              onClick={handleClearDraft}
+              className="text-[10px] text-slate-400 hover:text-rose-400 transition-colors underline"
+            >
+              ล้างร่างใหม่
+            </button>
           </div>
-          <div>
-            <span className="font-bold text-white block">ฝาก/ส่งของปกติข้ามโรงงาน</span>
-            <span className="text-[11px] text-slate-400">ระบบติดตามการเคลื่อนย้ายเครื่องมือและอุปกรณ์ (HET-1 ⇄ HET-2)</span>
-          </div>
-        </div>
+        )}
 
         {/* STEP 1: ระบุสิ่งของ & จำนวนที่ส่ง (รองรับการเพิ่มหลายรายการ) */}
         <div ref={searchBoxRef} className="bg-slate-900/75 border border-white/10 rounded-2xl p-4 space-y-4 shadow-lg backdrop-blur-md relative z-20">
@@ -882,60 +908,6 @@ export default function CreateRequestPage() {
             </button>
           </div>
 
-          {/* Quick Route Selector Buttons */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => handleSelectRoute('1_to_2')}
-              className={cn(
-                "p-3 rounded-xl border text-left transition-all active:scale-[0.98]",
-                watchFromId === het1?.id && watchToId === het2?.id
-                  ? "bg-gradient-to-br from-blue-950/80 to-cyan-950/50 border-cyan-400/80 shadow-lg shadow-cyan-500/20"
-                  : "bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white"
-              )}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-bold text-cyan-400">ทิศทาง A</span>
-                {watchFromId === het1?.id && watchToId === het2?.id && (
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                )}
-              </div>
-              <p className="font-extrabold text-xs text-white flex items-center gap-1.5">
-                <span>🏭 HET-1</span>
-                <ArrowRight size={13} className="text-cyan-400" />
-                <span>🏭 HET-2</span>
-              </p>
-              <p className="text-[10px] text-slate-400 mt-1">
-                HET-1 ส่งของ ➔ <strong className="text-emerald-300">HET-2 รับ</strong>
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSelectRoute('2_to_1')}
-              className={cn(
-                "p-3 rounded-xl border text-left transition-all active:scale-[0.98]",
-                watchFromId === het2?.id && watchToId === het1?.id
-                  ? "bg-gradient-to-br from-purple-950/80 to-indigo-950/50 border-purple-400/80 shadow-lg shadow-purple-500/20"
-                  : "bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white"
-              )}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-bold text-purple-400">ทิศทาง B</span>
-                {watchFromId === het2?.id && watchToId === het1?.id && (
-                  <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
-                )}
-              </div>
-              <p className="font-extrabold text-xs text-white flex items-center gap-1.5">
-                <span>🏭 HET-2</span>
-                <ArrowRight size={13} className="text-purple-400" />
-                <span>🏭 HET-1</span>
-              </p>
-              <p className="text-[10px] text-slate-400 mt-1">
-                HET-2 ส่งของ ➔ <strong className="text-emerald-300">HET-1 รับ</strong>
-              </p>
-            </button>
-          </div>
 
           <div className="grid grid-cols-2 gap-3 items-center pt-1">
             {/* Origin Location */}
@@ -973,13 +945,6 @@ export default function CreateRequestPage() {
             </div>
           </div>
 
-          {/* Rule Reminder */}
-          <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] text-slate-300 flex items-center gap-2">
-            <span className="text-cyan-400 font-bold">ℹ️ กฎการรับ-ส่ง:</span>
-            <span>
-              {fromLocation?.name || 'ต้นทาง'} ส่งของ ➔ เฉพาะผู้ใช้งานที่ <strong>{toLocation?.name || 'ปลายทาง'}</strong> เท่านั้นที่เป็นคนกดยืนยันรับของจริงเพื่อปิดงาน
-            </span>
-          </div>
 
           {errors.to_location_id && (
             <p className="text-rose-400 text-xs">{errors.to_location_id.message}</p>
