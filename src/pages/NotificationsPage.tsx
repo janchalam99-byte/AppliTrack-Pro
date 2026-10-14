@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell, BellOff, CheckCheck, ArrowRight } from 'lucide-react'
@@ -56,17 +57,24 @@ export default function NotificationsPage() {
     },
   })
 
+  const [isMarkingAll, setIsMarkingAll] = useState(false)
+
   const markAllRead = async () => {
-    if (!profile) return
-    const { error } = await supabase
-      .from('notifications')
-      .update({ is_read: true, read_at: new Date().toISOString() })
-      .eq('recipient_id', profile.id)
-      .eq('is_read', false)
-    if (!error) {
-      qc.invalidateQueries({ queryKey: ['notifications'] })
-      fetchUnreadCount()
-      toast.success('อ่านทั้งหมดแล้ว')
+    if (!profile || isMarkingAll) return
+    setIsMarkingAll(true)
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq('recipient_id', profile.id)
+        .eq('is_read', false)
+      if (!error) {
+        qc.invalidateQueries({ queryKey: ['notifications'] })
+        fetchUnreadCount()
+        toast.success('อ่านทั้งหมดแล้ว')
+      }
+    } finally {
+      setIsMarkingAll(false)
     }
   }
 
@@ -84,10 +92,11 @@ export default function NotificationsPage() {
         {unreadCount > 0 && (
           <button
             onClick={markAllRead}
-            className="flex items-center gap-1.5 text-sm text-blue-400 font-medium hover:text-blue-300 transition-colors"
+            disabled={isMarkingAll}
+            className="flex items-center gap-1.5 text-sm text-blue-400 font-medium hover:text-blue-300 disabled:opacity-50 transition-colors"
           >
             <CheckCheck size={16} />
-            อ่านทั้งหมด
+            {isMarkingAll ? 'กำลังดำเนินการ...' : 'อ่านทั้งหมด'}
           </button>
         )}
       </div>

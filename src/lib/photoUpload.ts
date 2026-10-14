@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { compressImage, type CompressionResult } from './utils'
+import { withTimeout } from './safety'
 import type { PhotoStage, ItemPhoto } from '../types/database'
 
 export interface UploadPhotoOptions {
@@ -28,17 +29,21 @@ export async function uploadEvidencePhoto(options: UploadPhotoOptions): Promise<
   const comp = await compressImage(file, 1600, 1600, 0.82)
   const compressedFile = comp.file
 
-  // 2. Upload to Supabase Storage
+  // 2. Upload to Supabase Storage with safety timeout (25s)
   const ext = 'jpg'
   const timestamp = Date.now()
   const storagePath = `${requestId}/${userId}/${timestamp}_${stage}.${ext}`
 
-  const { error: uploadError } = await supabase.storage
-    .from('item-photos')
-    .upload(storagePath, compressedFile, {
-      contentType: 'image/jpeg',
-      upsert: false,
-    })
+  const { error: uploadError } = await withTimeout(
+    supabase.storage
+      .from('item-photos')
+      .upload(storagePath, compressedFile, {
+        contentType: 'image/jpeg',
+        upsert: false,
+      }),
+    25000,
+    'การอัปโหลดรูปภาพใช้เวลานานเกินไป กรุณาตรวจสอบสัญญาณอินเทอร์เน็ต'
+  )
 
   if (uploadError) throw uploadError
 

@@ -9,7 +9,7 @@ import './index.css'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 0, // Always fetch freshest data immediately on navigation
+      staleTime: 5000, // 5s fresh cache: prevents rapid window focus refetch spam and reduces network load
       refetchOnWindowFocus: true,
       refetchOnMount: true,
       refetchOnReconnect: true,

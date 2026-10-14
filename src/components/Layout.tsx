@@ -37,6 +37,7 @@ export default function Layout() {
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-white text-base tracking-tight font-sans">AppliTrack</span>
               <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-sm shadow-cyan-500/20">PRO</span>
+              <span className="text-[9px] font-mono text-cyan-400/80 font-bold">v2.1</span>
               {profile && (
                 <span className={cn(
                   "text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 font-mono",

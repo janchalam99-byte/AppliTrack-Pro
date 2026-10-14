@@ -78,6 +78,7 @@ export default function LoginPage() {
   }
 
   const onSubmit = async (data: FormData) => {
+    if (isLoading) return
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณาเชื่อมต่อ Wi-Fi หรือเน็ตมือถือ', { icon: '📡' })
       return

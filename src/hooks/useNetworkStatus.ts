@@ -53,11 +53,13 @@ export function useNetworkStatus() {
   // Active ping test
   const testConnection = useCallback(async () => {
     setIsCheckingPing(true)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 6000)
     try {
       // Use head request with cache buster
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 4000)
-      const res = await fetch(`https://wwvvmjkzrkirbyacpkmt.supabase.co/rest/v1/?_t=${Date.now()}`, {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://wwvvmjkzrkirbyacpkmt.supabase.co'
+      const pingUrl = `${supabaseUrl}/rest/v1/?_t=${Date.now()}`
+      const res = await fetch(pingUrl, {
         method: 'HEAD',
         signal: controller.signal,
       }).catch(() => null)

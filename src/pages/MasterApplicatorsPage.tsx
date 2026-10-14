@@ -66,6 +66,7 @@ export default function MasterApplicatorsPage() {
   // Submit Modal
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isAdding || isUpdating) return
     if (!formData.terminal_name.trim()) {
       toast.error('กรุณาระบุชื่อ Terminal Name')
       return
@@ -85,6 +86,7 @@ export default function MasterApplicatorsPage() {
 
   // Handle Delete
   const handleDelete = async (item: MasterApplicator) => {
+    if (isDeleting) return
     const confirmText = `ต้องการลบ ${item.app_no || item.terminal_name} ออกจากฐานข้อมูล Master หรือไม่?`
     if (!window.confirm(confirmText)) return
 

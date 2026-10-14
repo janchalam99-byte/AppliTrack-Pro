@@ -20,6 +20,7 @@ import {
   type ApplicatorItem 
 } from '../data/applicatorMaster'
 import { uploadEvidencePhoto } from '../lib/photoUpload'
+import { generateUniqueRequestNumber, sanitizeString } from '../lib/safety'
 import toast from 'react-hot-toast'
 
 export interface SendItem {
@@ -63,6 +64,8 @@ export default function CreateRequestPage() {
   const locations = useAppStore((s) => s.locations)
   const [photos, setPhotos] = useState<UploadedPhoto[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isSubmittingRef = useRef(false)
+  const lastSubmitTimeRef = useRef(0)
 
   // Dynamic quick options (Staff & Remarks)
   const { staffOptions, remarkOptions, addOption, removeOption } = useQuickOptions()
@@ -384,21 +387,23 @@ export default function CreateRequestPage() {
     setValue('to_location_id', watchFromId)
   }
 
-  const generateRequestNumber = async (type: string): Promise<string> => {
+  const generateRequestNumber = async (type: string, retryAttempt = 0): Promise<string> => {
     const prefix = type === 'loan' ? 'LN' : 'TR'
-    try {
-      const { data, error } = await supabase.rpc('generate_request_number', { req_type: type })
-      if (!error && data) {
-        // Double check uniqueness just in case
-        const { data: existing } = await supabase
-          .from('transfer_requests')
-          .select('id')
-          .eq('request_number', data)
-          .maybeSingle()
-        if (!existing) return data
+    if (retryAttempt === 0) {
+      try {
+        const { data, error } = await supabase.rpc('generate_request_number', { req_type: type })
+        if (!error && data) {
+          // Double check uniqueness just in case
+          const { data: existing } = await supabase
+            .from('transfer_requests')
+            .select('id')
+            .eq('request_number', data)
+            .maybeSingle()
+          if (!existing) return data
+        }
+      } catch {
+        // Fallback below
       }
-    } catch {
-      // Fallback below
     }
 
     // Client-side fallback generator based on current date and latest record
@@ -423,42 +428,51 @@ export default function CreateRequestPage() {
           nextSeq = parseInt(match[1], 10) + 1
         }
       }
-      return `${prefix}-${datePart}-${String(nextSeq).padStart(3, '0')}`
+      return generateUniqueRequestNumber(prefix, datePart, nextSeq, retryAttempt)
     } catch {
-      return `${prefix}-${datePart}-${Date.now().toString().slice(-4)}`
+      return generateUniqueRequestNumber(prefix, datePart, Date.now() % 1000, retryAttempt + 1)
     }
   }
 
   const onSubmit = async (data: FormData) => {
     if (!profile) return
+
+    // Prevent duplicate/repeated submit clicks
+    const nowTs = Date.now()
+    if (isSubmittingRef.current || (nowTs - lastSubmitTimeRef.current < 2500)) {
+      console.warn('Duplicate submit blocked')
+      return
+    }
+
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณารอเชื่อมต่อเน็ตก่อนบันทึกรายการ', { icon: '📡' })
       return
     }
-    setIsSubmitting(true)
 
-    // Validate all items
+    // Validate all items BEFORE engaging submission lock
     for (let i = 0; i < items.length; i++) {
       const it = items[i]
       if (!it.terminal_name.trim() && !it.app_no.trim()) {
         toast.error(`กรุณาระบุชื่อสิ่งของในรายการที่ ${i + 1}`)
-        setIsSubmitting(false)
         return
       }
       if (!it.quantity || Number(it.quantity) <= 0) {
         toast.error(`กรุณาระบุจำนวนที่มากกว่า 0 ในรายการที่ ${i + 1}`)
-        setIsSubmitting(false)
         return
       }
     }
 
+    const pendingUploads = photos.filter(p => p.status === 'uploading')
+    if (pendingUploads.length > 0) {
+      toast.error('กรุณารอให้รูปภาพอัปโหลดเสร็จก่อน')
+      return
+    }
+
+    isSubmittingRef.current = true
+    lastSubmitTimeRef.current = nowTs
+    setIsSubmitting(true)
+
     try {
-      const pendingUploads = photos.filter(p => p.status === 'uploading')
-      if (pendingUploads.length > 0) {
-        toast.error('กรุณารอให้รูปภาพอัปโหลดเสร็จก่อน')
-        setIsSubmitting(false)
-        return
-      }
 
       let requestNumber = await generateRequestNumber(data.type)
       const now = new Date().toISOString()
@@ -507,34 +521,39 @@ export default function CreateRequestPage() {
         .select()
         .single()
 
-      // If duplicate key error, retry once with fresh request number
+      // If duplicate key error, retry up to 2 times with collision-breaker suffix
       if (reqInsert.error && (reqInsert.error.code === '23505' || reqInsert.error.message?.includes('unique'))) {
-        requestNumber = await generateRequestNumber('transfer')
-        reqInsert = await supabase
-          .from('transfer_requests')
-          .insert({
-            request_number: requestNumber,
-            type: 'transfer',
-            status: isDeposited ? 'in_transit' : 'ready_to_send',
-            title: title,
-            app_no: cleanAppNo,
-            terminal_name: cleanTerminal,
-            sender_staff_name: data.sender_staff_name.trim(),
-            receiver_staff_name: data.receiver_staff_name?.trim() || null,
-            remark_base: data.remark_base?.trim() || null,
-            notes: data.notes || null,
-            from_location_id: data.from_location_id,
-            to_location_id: data.to_location_id,
-            requester_id: profile.id,
-            deposited_at: isDeposited ? now : null,
-            deposited_recorded_at: isDeposited ? now : null,
-            deposited_by: isDeposited ? profile.id : null,
-            is_deposit_backdated: false,
-            due_date: null,
-            loan_due_date: null,
-          })
-          .select()
-          .single()
+        console.warn('Duplicate request number detected, retrying with unique suffix...')
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          requestNumber = await generateRequestNumber('transfer', attempt)
+          reqInsert = await supabase
+            .from('transfer_requests')
+            .insert({
+              request_number: requestNumber,
+              type: 'transfer',
+              status: isDeposited ? 'in_transit' : 'ready_to_send',
+              title: title,
+              app_no: cleanAppNo,
+              terminal_name: cleanTerminal,
+              sender_staff_name: data.sender_staff_name.trim(),
+              receiver_staff_name: data.receiver_staff_name?.trim() || null,
+              remark_base: data.remark_base?.trim() || null,
+              notes: data.notes || null,
+              from_location_id: data.from_location_id,
+              to_location_id: data.to_location_id,
+              requester_id: profile.id,
+              deposited_at: isDeposited ? now : null,
+              deposited_recorded_at: isDeposited ? now : null,
+              deposited_by: isDeposited ? profile.id : null,
+              is_deposit_backdated: false,
+              due_date: null,
+              loan_due_date: null,
+            })
+            .select()
+            .single()
+
+          if (!reqInsert.error) break
+        }
       }
 
       const { data: request, error: reqError } = reqInsert
@@ -636,6 +655,7 @@ export default function CreateRequestPage() {
       toast.error(`เกิดข้อผิดพลาด: ${err.message}`)
     } finally {
       setIsSubmitting(false)
+      isSubmittingRef.current = false
     }
   }
 
@@ -659,7 +679,17 @@ export default function CreateRequestPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form
+        onSubmit={(e) => {
+          if (isSubmittingRef.current) {
+            e.preventDefault()
+            e.stopPropagation()
+            return
+          }
+          handleSubmit(onSubmit)(e)
+        }}
+        className="space-y-4"
+      >
 
         {/* Offline Draft Auto-Saved Indicator */}
         {hasDraftSaved && (
@@ -968,10 +998,30 @@ export default function CreateRequestPage() {
                 <User size={13} className="text-purple-400" />
                 <span>ชื่อผู้ส่ง (ต้นทาง {fromLocation?.name || 'ต้นทาง'})</span> <span className="text-rose-400">*</span>
               </label>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setIsAddingStaff(!isAddingStaff)}
+                  onClick={() => {
+                    setIsManagingStaff(!isManagingStaff)
+                    if (isAddingStaff) setIsAddingStaff(false)
+                  }}
+                  className={cn(
+                    "text-[10px] font-semibold px-2 py-0.5 rounded-lg border flex items-center gap-1 transition-all active:scale-95",
+                    isManagingStaff 
+                      ? "bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm"
+                      : "text-slate-400 hover:text-slate-200 bg-slate-800/60 border-slate-700/60"
+                  )}
+                  title="จัดการหรือลบชื่อด่วน"
+                >
+                  <Trash2 size={11} className={isManagingStaff ? "text-rose-400" : "text-slate-400"} />
+                  <span>{isManagingStaff ? 'เสร็จสิ้น' : 'ลบชื่อด่วน'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingStaff(!isAddingStaff)
+                    if (isManagingStaff) setIsManagingStaff(false)
+                  }}
                   className="text-[10px] font-semibold text-purple-400 hover:text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-lg border border-purple-500/20 flex items-center gap-1"
                 >
                   <Plus size={11} /> เพิ่มชื่อ
@@ -994,18 +1044,44 @@ export default function CreateRequestPage() {
                 <button
                   key={`send-${name}`}
                   type="button"
-                  onClick={() => setValue('sender_staff_name', name)}
+                  onClick={() => {
+                    if (isManagingStaff) {
+                      if (window.confirm(`ต้องการลบชื่อด่วน "${name}" ออกจากระบบใช่หรือไม่?`)) {
+                        removeOption('staff', name)
+                        if (watchSenderStaff === name) {
+                          setValue('sender_staff_name', '')
+                        }
+                      }
+                    } else {
+                      setValue('sender_staff_name', name)
+                    }
+                  }}
                   className={cn(
-                    'text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all active:scale-95',
-                    watchSenderStaff === name
-                      ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
-                      : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
+                    'text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all active:scale-95 flex items-center gap-1',
+                    isManagingStaff
+                      ? 'bg-rose-950/40 text-rose-300 border-rose-500/50 hover:bg-rose-900/60'
+                      : watchSenderStaff === name
+                        ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
+                        : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
                   )}
+                  title={isManagingStaff ? `แตะเพื่อลบ "${name}"` : undefined}
                 >
-                  {name}
+                  <span>{name}</span>
+                  {isManagingStaff && (
+                    <span className="w-3.5 h-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[10px] ml-0.5 leading-none">
+                      ×
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
+
+            {isManagingStaff && (
+              <p className="text-[11px] text-rose-300 bg-rose-950/30 border border-rose-500/20 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5 animate-in fade-in duration-150">
+                <span>⚠️</span>
+                <span>โหมดลบชื่อ: แตะที่ชื่อที่ต้องการลบเพื่อยืนยันนำชื่อออก</span>
+              </p>
+            )}
 
             {/* Inline Add Staff Box */}
             {isAddingStaff && (
@@ -1140,7 +1216,7 @@ export default function CreateRequestPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3.5 sm:py-4 px-3 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xl shadow-cyan-500/20 text-xs sm:text-sm"
+              className="w-full bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:opacity-50 disabled:pointer-events-none text-white font-bold py-3.5 sm:py-4 px-3 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xl shadow-cyan-500/20 text-xs sm:text-sm cursor-pointer"
             >
               {isSubmitting ? (
                 <>
@@ -1148,7 +1224,7 @@ export default function CreateRequestPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  <span>กำลังบันทึกรายการ...</span>
+                  <span>กำลังบันทึกรายการ... (ห้ามกดซ้ำ)</span>
                 </>
               ) : (
                 <>
@@ -1162,7 +1238,7 @@ export default function CreateRequestPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3.5 sm:py-4 px-3 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-500/20 text-xs sm:text-sm"
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 disabled:pointer-events-none text-white font-bold py-3.5 sm:py-4 px-3 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-500/20 text-xs sm:text-sm cursor-pointer"
             >
               {isSubmitting ? (
                 <>
@@ -1170,7 +1246,7 @@ export default function CreateRequestPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  <span>กำลังบันทึกรายการ...</span>
+                  <span>กำลังบันทึกรายการ... (ห้ามกดซ้ำ)</span>
                 </>
               ) : (
                 <>
@@ -1182,6 +1258,17 @@ export default function CreateRequestPage() {
           )}
         </div>
       </form>
+
+      {/* Fullscreen Overlay while submitting to strictly prevent any repeated clicks */}
+      {isSubmitting && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 select-none">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl space-y-3 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto" />
+            <h3 className="text-sm font-bold text-white">กำลังบันทึกรายการส่งของ...</h3>
+            <p className="text-xs text-slate-400">ระบบกำลังส่งข้อมูลขึ้นคลาวด์และแจ้งเตือน กรุณาอย่ากดส่งซ้ำ</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

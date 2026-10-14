@@ -13,6 +13,7 @@ import { useQuickOptions } from '../hooks/useQuickOptions'
 import { cn } from '../lib/utils'
 import toast from 'react-hot-toast'
 import type { Location } from '../types/database'
+import { APP_VERSION } from '../version'
 
 export default function SettingsPage() {
   const { profile, signOut } = useAuth()
@@ -31,7 +32,7 @@ export default function SettingsPage() {
   const [isSavingProfile, setIsSavingProfile] = useState(false)
 
   // Quick options management
-  const { staffOptions, remarkOptions, addOption, removeOption } = useQuickOptions()
+  const { staffOptions, remarkOptions, addOption, removeOption, isAdding } = useQuickOptions()
   const [newStaff, setNewStaff] = useState('')
   const [newRemark, setNewRemark] = useState('')
 
@@ -281,12 +282,13 @@ export default function SettingsPage() {
             />
             <button
               onClick={() => {
-                if (newStaff.trim()) {
+                if (newStaff.trim() && !isAdding) {
                   addOption('staff', newStaff.trim())
                   setNewStaff('')
                 }
               }}
-              className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 flex items-center gap-1"
+              disabled={isAdding}
+              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:pointer-events-none text-white text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 flex items-center gap-1"
             >
               <Plus size={13} />
               เพิ่มชื่อ
@@ -331,7 +333,7 @@ export default function SettingsPage() {
               onKeyDown={e => {
                 if (e.key === 'Enter') {
                   e.preventDefault()
-                  if (newRemark.trim()) {
+                  if (newRemark.trim() && !isAdding) {
                     addOption('remark', newRemark.trim())
                     setNewRemark('')
                   }
@@ -340,12 +342,13 @@ export default function SettingsPage() {
             />
             <button
               onClick={() => {
-                if (newRemark.trim()) {
+                if (newRemark.trim() && !isAdding) {
                   addOption('remark', newRemark.trim())
                   setNewRemark('')
                 }
               }}
-              className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 flex items-center gap-1"
+              disabled={isAdding}
+              className="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:pointer-events-none text-white text-xs font-bold px-3 py-2 rounded-xl transition-all active:scale-95 flex items-center gap-1"
             >
               <Plus size={13} />
               เพิ่มปุ่ม
@@ -466,7 +469,7 @@ export default function SettingsPage() {
           <Settings size={16} className="text-slate-400" />
           <h2 className="text-sm font-bold text-white">เกี่ยวกับแอป</h2>
         </div>
-        <InfoRow label="เวอร์ชัน" value="1.0.0" />
+        <InfoRow label="เวอร์ชัน" value={`v${APP_VERSION} (ระบบป้องกันการส่งซ้ำ & เสถียรภาพสูง)`} />
         <InfoRow label="ฐานข้อมูล" value="Supabase PostgreSQL (Free Tier 500 MB)" />
         <InfoRow label="ที่เก็บรูป" value="Supabase Storage (Free Tier 1 GB)" />
         <InfoRow label="การบีบอัดภาพ" value="Client-side Adaptive 1600px (ประหยัด ~85%)" />

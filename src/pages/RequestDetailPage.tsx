@@ -64,6 +64,10 @@ export default function RequestDetailPage() {
   const [actionNotes, setActionNotes] = useState('')
   const [problemType, setProblemType] = useState<string>('incomplete')
   const [isDepositing, setIsDepositing] = useState(false)
+  const [isConfirmingReceipt, setIsConfirmingReceipt] = useState(false)
+  const [isReturnDepositing, setIsReturnDepositing] = useState(false)
+  const [isConfirmingReturn, setIsConfirmingReturn] = useState(false)
+  const isActionBusyRef = useRef(false)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [receiverStaffInput, setReceiverStaffInput] = useState('')
   const receiverInputInitializedRef = useRef(false)
@@ -120,7 +124,7 @@ export default function RequestDetailPage() {
   }
 
   const handleAdminSaveEdit = async () => {
-    if (!profile || profile.role !== 'admin' || !request) return
+    if (!profile || profile.role !== 'admin' || !request || isAdminOperating) return
     setIsAdminOperating(true)
     try {
       const { error } = await supabase
@@ -148,7 +152,7 @@ export default function RequestDetailPage() {
   }
 
   const handleAdminOverrideStatusSubmit = async () => {
-    if (!profile || profile.role !== 'admin' || !request || !adminOverrideStatus) return
+    if (!profile || profile.role !== 'admin' || !request || !adminOverrideStatus || isAdminOperating) return
     setIsAdminOperating(true)
     try {
       const { error } = await supabase
@@ -181,7 +185,7 @@ export default function RequestDetailPage() {
   }
 
   const handleAdminDelete = async () => {
-    if (!profile || profile.role !== 'admin' || !request) return
+    if (!profile || profile.role !== 'admin' || !request || isAdminOperating) return
     const confirmed = window.confirm(
       `⚠️ คำเตือนจากระบบ (เฉพาะ Admin):\n\nคุณแน่ใจหรือไม่ว่าต้องการลบใบงาน "${request.request_number}" (${request.terminal_name || request.title}) ออกจากระบบ?\n\n* รายการสิ่งของ ประวัติสถานะ และรูปภาพหลักฐานทั้งหมดจะถูกลบถาวร ไม่สามารถกู้คืนได้`
     )
@@ -279,7 +283,8 @@ export default function RequestDetailPage() {
   }
 
   const handleReadyToSend = async () => {
-    if (!profile) return
+    if (!profile || isActionBusyRef.current) return
+    isActionBusyRef.current = true
     try {
       await changeStatus('ready_to_send', 'เตรียมของเสร็จแล้ว')
       toast.success('บันทึกสถานะพร้อมฝากสำเร็จ')
@@ -287,15 +292,18 @@ export default function RequestDetailPage() {
       setShowAction(null)
     } catch (e: any) {
       toast.error(`ผิดพลาด: ${e.message}`)
+    } finally {
+      isActionBusyRef.current = false
     }
   }
 
   const handleDeposit = async () => {
-    if (!profile || !request) return
+    if (!profile || !request || isActionBusyRef.current || isDepositing) return
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณารอเชื่อมต่อก่อนฝากของ', { icon: '📡' })
       return
     }
+    isActionBusyRef.current = true
     setIsDepositing(true)
 
     try {
@@ -354,6 +362,7 @@ export default function RequestDetailPage() {
       toast.error(`ผิดพลาด: ${e.message}`)
     } finally {
       setIsDepositing(false)
+      isActionBusyRef.current = false
     }
   }
 
@@ -370,11 +379,14 @@ export default function RequestDetailPage() {
   }
 
   const handleConfirmReceipt = async (hasProblem: boolean) => {
-    if (!profile || !request) return
+    if (!profile || !request || isActionBusyRef.current || isConfirmingReceipt) return
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณารอเชื่อมต่อก่อนยืนยันรับของ', { icon: '📡' })
       return
     }
+
+    isActionBusyRef.current = true
+    setIsConfirmingReceipt(true)
 
     try {
       // Upload receipt photos
@@ -484,15 +496,20 @@ export default function RequestDetailPage() {
       invalidate()
     } catch (e: any) {
       toast.error(`ผิดพลาด: ${e.message}`)
+    } finally {
+      setIsConfirmingReceipt(false)
+      isActionBusyRef.current = false
     }
   }
 
   const handleReturnDeposit = async () => {
-    if (!profile || !request) return
+    if (!profile || !request || isActionBusyRef.current || isReturnDepositing) return
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณารอเชื่อมต่อก่อนฝากคืน', { icon: '📡' })
       return
     }
+    isActionBusyRef.current = true
+    setIsReturnDepositing(true)
     try {
       for (const photo of actionPhotos.filter(p => p.file)) {
         await uploadActionPhoto(photo, request.id, 'pre_return')
@@ -518,15 +535,20 @@ export default function RequestDetailPage() {
       invalidate()
     } catch (e: any) {
       toast.error(`ผิดพลาด: ${e.message}`)
+    } finally {
+      setIsReturnDepositing(false)
+      isActionBusyRef.current = false
     }
   }
 
   const handleConfirmReturn = async () => {
-    if (!profile || !request) return
+    if (!profile || !request || isActionBusyRef.current || isConfirmingReturn) return
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       toast.error('ขณะนี้ไม่มีสัญญาณอินเทอร์เน็ต กรุณารอเชื่อมต่อก่อนยืนยันรับคืน', { icon: '📡' })
       return
     }
+    isActionBusyRef.current = true
+    setIsConfirmingReturn(true)
     try {
       for (const photo of actionPhotos.filter(p => p.file)) {
         await uploadActionPhoto(photo, request.id, 'return_receipt')
@@ -569,12 +591,16 @@ export default function RequestDetailPage() {
       invalidate()
     } catch (e: any) {
       toast.error(`ผิดพลาด: ${e.message}`)
+    } finally {
+      setIsConfirmingReturn(false)
+      isActionBusyRef.current = false
     }
   }
 
   const handleCancel = async () => {
-    if (!profile || !request) return
+    if (!profile || !request || isActionBusyRef.current) return
     if (!window.confirm('ยืนยันการยกเลิกรายการนี้?')) return
+    isActionBusyRef.current = true
     try {
       const reason = prompt('ระบุเหตุผลการยกเลิก:')
       await supabase.from('transfer_requests').update({
@@ -596,6 +622,8 @@ export default function RequestDetailPage() {
       invalidate()
     } catch (e: any) {
       toast.error(`ผิดพลาด: ${e.message}`)
+    } finally {
+      isActionBusyRef.current = false
     }
   }
 
@@ -1230,10 +1258,11 @@ export default function RequestDetailPage() {
         <ActionPanel
           title={`✅ ${request.to_location?.name || 'ผู้รับ'} กดยืนยันรับของ (ปิดงาน)`}
           onConfirm={() => handleConfirmReceipt(false)}
-          confirmLabel="ได้รับของครบแล้ว (ปิดงาน) ✓"
+          confirmLabel={isConfirmingReceipt ? "กำลังบันทึก..." : "ได้รับของครบแล้ว (ปิดงาน) ✓"}
           confirmVariant="success"
-          secondaryLabel="แจ้งปัญหา / รับไม่ครบ"
+          secondaryLabel={isConfirmingReceipt ? undefined : "แจ้งปัญหา / รับไม่ครบ"}
           onSecondary={() => handleConfirmReceipt(true)}
+          isLoading={isConfirmingReceipt}
         >
           <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-200 space-y-2">
             <p className="font-bold text-white flex items-center justify-between">
@@ -1419,8 +1448,9 @@ export default function RequestDetailPage() {
         <ActionPanel
           title="ฝากของคืนแล้ว"
           onConfirm={handleReturnDeposit}
-          confirmLabel="บันทึกการฝากคืน"
+          confirmLabel={isReturnDepositing ? "กำลังบันทึก..." : "บันทึกการฝากคืน"}
           confirmVariant="primary"
+          isLoading={isReturnDepositing}
         >
           <PhotoUploader
             stage="pre_return"
@@ -1444,8 +1474,9 @@ export default function RequestDetailPage() {
         <ActionPanel
           title="ยืนยันรับคืน"
           onConfirm={handleConfirmReturn}
-          confirmLabel="ยืนยันรับคืน ✓"
+          confirmLabel={isConfirmingReturn ? "กำลังบันทึก..." : "ยืนยันรับคืน ✓"}
           confirmVariant="success"
+          isLoading={isConfirmingReturn}
         >
           <PhotoUploader
             stage="return_receipt"
@@ -1663,7 +1694,8 @@ function ActionPanel({
         {secondaryLabel && onSecondary && (
           <button
             onClick={onSecondary}
-            className="flex-1 py-3 rounded-2xl font-bold text-sm bg-orange-500/20 border border-orange-500/30 text-orange-400 transition-all active:scale-95"
+            disabled={isLoading}
+            className="flex-1 py-3 rounded-2xl font-bold text-sm bg-orange-500/20 border border-orange-500/30 text-orange-400 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
           >
             {secondaryLabel}
           </button>

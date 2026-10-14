@@ -1,9 +1,15 @@
 // Service Worker for AppliTrack Pro (PWA)
-const CACHE_NAME = 'applitrack-v5'
+const CACHE_NAME = 'applitrack-v6'
 const PRECACHE_ASSETS = [
   '/icon.svg',
   '/manifest.json'
 ]
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
+})
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()

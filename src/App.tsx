@@ -14,6 +14,7 @@ import NotificationsPage from './pages/NotificationsPage'
 import UsagePage from './pages/UsagePage'
 import MasterApplicatorsPage from './pages/MasterApplicatorsPage'
 import ToolJourneyPage from './pages/ToolJourneyPage'
+import UpdateNotificationModal from './components/UpdateNotificationModal'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -131,6 +132,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
+        <UpdateNotificationModal />
         <AppRoutes />
       </AuthProvider>
     </ErrorBoundary>
